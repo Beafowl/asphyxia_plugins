@@ -70,8 +70,21 @@ div(hidden id='data-pass-scores') !{JSON.stringify(scores)}
 
 script.
   (function() {
-    var TACHI_CLIENT_ID = 'CI9339507b051068964d992b471e1d051bfda25e65';
-    var TACHI_AUTH_URL = 'https://kamai.tachi.ac/oauth/request-auth?clientID=' + TACHI_CLIENT_ID;
+    var TACHI_CLIENT_ID = '';
+    var TACHI_AUTH_URL = '';
+
+    fetch('/tachi/config')
+      .then(function(r) { return r.json(); })
+      .then(function(cfg) {
+        TACHI_CLIENT_ID = cfg.clientId || '';
+        TACHI_AUTH_URL = 'https://kamai.tachi.ac/oauth/request-auth?clientID=' + TACHI_CLIENT_ID;
+        if (!TACHI_CLIENT_ID) {
+          document.getElementById('tachi-status').style.display = 'none';
+          document.getElementById('tachi-not-authorized').style.display = '';
+          document.getElementById('tachi-not-authorized').innerHTML =
+            '<div class="notification is-warning is-light">Tachi Client ID is not configured. Set it in the Asphyxia settings page.</div>';
+        }
+      });
 
     var music_db = null;
     var music_db_loaded = false;
