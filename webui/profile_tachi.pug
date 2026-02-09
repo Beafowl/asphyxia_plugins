@@ -288,9 +288,16 @@ script.
           var html = '';
           if (data.success) {
             var body = data.body || {};
-            html += '<p class="has-text-success"><strong>Import successful!</strong></p>';
-            html += '<p>Scores sent: ' + tachiScores.length + '</p>';
-            if (body.scoreIDs) html += '<p>Scores imported: ' + body.scoreIDs.length + '</p>';
+            html += '<p class="has-text-success"><strong>Export successful!</strong></p>';
+            html += '<p>Total scores: ' + tachiScores.length + '</p>';
+            if (data._totalSkipped !== undefined) {
+              html += '<p>Skipped (Tachi already has equal or better): ' + data._totalSkipped + '</p>';
+              html += '<p>Sent to Tachi: ' + (data._totalSent || 0) + '</p>';
+            }
+            if (data._totalSent === 0 && data._totalSkipped > 0) {
+              html += '<p class="has-text-info">All scores on Tachi are already up to date!</p>';
+            }
+            if (body.scoreIDs) html += '<p>New scores on Tachi: ' + body.scoreIDs.length + '</p>';
             if (body.errors) html += '<p>Errors: ' + body.errors.length + '</p>';
             if (body.errors && body.errors.length > 0) {
               html += '<details><summary>Error details</summary><ul>';
@@ -438,7 +445,14 @@ script.
               html += '<p>No Exceed Gear (v6) scores to export.</p>';
             } else if (exportResult.success) {
               var ebody = exportResult.body || {};
-              html += '<p>Scores sent: ' + cleanScores.length + '</p>';
+              html += '<p>Total scores: ' + cleanScores.length + '</p>';
+              if (exportResult._totalSkipped !== undefined) {
+                html += '<p>Skipped (Tachi already has equal or better): ' + exportResult._totalSkipped + '</p>';
+                html += '<p>Sent to Tachi: ' + (exportResult._totalSent || 0) + '</p>';
+              }
+              if (exportResult._totalSent === 0 && exportResult._totalSkipped > 0) {
+                html += '<p class="has-text-info">All scores on Tachi are already up to date!</p>';
+              }
               if (ebody.scoreIDs) html += '<p>New scores on Tachi: ' + ebody.scoreIDs.length + '</p>';
               if (ebody.errors && ebody.errors.length > 0) html += '<p>Errors: ' + ebody.errors.length + '</p>';
             } else {
