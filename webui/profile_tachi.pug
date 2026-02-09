@@ -212,10 +212,11 @@ script.
         if (!diff) continue;
 
         var timeAchieved = null;
-        if (s.updatedAt) {
-          timeAchieved = new Date(s.updatedAt).getTime();
-        } else if (s.createdAt) {
-          timeAchieved = new Date(s.createdAt).getTime();
+        var ts = s.updatedAt || s.createdAt;
+        if (ts) {
+          // NeDB serializes dates as { $$date: <milliseconds> }
+          timeAchieved = (ts.$$date != null) ? ts.$$date : new Date(ts).getTime();
+          if (isNaN(timeAchieved)) timeAchieved = null;
         }
 
         tachiScores.push({
