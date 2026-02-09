@@ -214,9 +214,16 @@ script.
         var timeAchieved = null;
         var ts = s.updatedAt || s.createdAt;
         if (ts) {
-          // NeDB serializes dates as { $$date: <milliseconds> }
-          timeAchieved = (ts.$$date != null) ? ts.$$date : new Date(ts).getTime();
-          if (isNaN(timeAchieved)) timeAchieved = null;
+          if (typeof ts === 'number') {
+            timeAchieved = ts;
+          } else if (typeof ts === 'string') {
+            timeAchieved = new Date(ts).getTime();
+          } else if (ts.$$date != null) {
+            timeAchieved = ts.$$date;
+          } else if (ts instanceof Date || (typeof ts === 'object' && ts.getTime)) {
+            timeAchieved = ts.getTime();
+          }
+          if (timeAchieved != null && isNaN(timeAchieved)) timeAchieved = null;
         }
 
         tachiScores.push({
@@ -251,11 +258,12 @@ script.
         html += '<details open><summary>First 20 scores</summary>';
         html += '<div style="max-height:400px;overflow:auto;">';
         html += '<table class="table is-narrow is-fullwidth is-striped" style="font-size:0.8em;">';
-        html += '<thead><tr><th>ID</th><th>Song Name</th><th>Difficulty</th><th>Score</th><th>Lamp</th></tr></thead><tbody>';
+        html += '<thead><tr><th>ID</th><th>Song Name</th><th>Difficulty</th><th>Score</th><th>Lamp</th><th>Time</th></tr></thead><tbody>';
         var preview = result.tachiScores.slice(0, 20);
         for (var i = 0; i < preview.length; i++) {
           var s = preview[i];
-          html += '<tr><td>' + s.identifier + '</td><td>' + s._songName + '</td><td>' + s.difficulty + '</td><td>' + s.score + '</td><td>' + s.lamp + '</td></tr>';
+          var timeStr = s.timeAchieved ? new Date(s.timeAchieved).toLocaleString() : '-';
+          html += '<tr><td>' + s.identifier + '</td><td>' + s._songName + '</td><td>' + s.difficulty + '</td><td>' + s.score + '</td><td>' + s.lamp + '</td><td>' + timeStr + '</td></tr>';
         }
         html += '</tbody></table></div></details>';
         html += '<details><summary>All ' + result.tachiScores.length + ' scores (JSON)</summary>';
