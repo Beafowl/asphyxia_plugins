@@ -355,7 +355,7 @@ script.
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refid: refid, scores: data.scores.map(function(s) {
-              return { mid: s.mid, type: s.type, score: s.score, clear: s.clear, grade: s.grade, exscore: s.exscore, version: 6 };
+              return { mid: s.mid, type: s.type, score: s.score, clear: s.clear, grade: s.grade, exscore: s.exscore, timeAchieved: s.timeAchieved || null, version: 6 };
             })})
           })
             .then(function(r) { return r.json(); })
