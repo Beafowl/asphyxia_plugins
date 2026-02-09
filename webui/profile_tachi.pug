@@ -198,12 +198,20 @@ script.
         var diff = getDifficulty(s.mid, s.type);
         if (!diff) continue;
 
+        var timeAchieved = null;
+        if (s.updatedAt) {
+          timeAchieved = new Date(s.updatedAt).getTime();
+        } else if (s.createdAt) {
+          timeAchieved = new Date(s.createdAt).getTime();
+        }
+
         tachiScores.push({
           score: s.score,
           lamp: lamp,
           matchType: 'sdvxInGameID',
           identifier: String(s.mid),
           difficulty: diff,
+          timeAchieved: timeAchieved,
           _songName: getSongName(s.mid)
         });
       }
