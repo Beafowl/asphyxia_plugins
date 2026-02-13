@@ -51,10 +51,14 @@ div
                         i.mdi.mdi-chevron-down
                   .dropdown-menu(role="menu")
                     .dropdown-content
-                      a.dropdown-item#tachi-upload-btn(data-tooltip="Send local Exceed Gear scores to Tachi" data-tooltip-position="right")
+                      a.dropdown-item#tachi-upload-btn(data-tooltip="Send new scores to Tachi since last export" data-tooltip-position="right")
                         span.icon
                           i.mdi.mdi-upload
                         |  Export to Tachi
+                      a.dropdown-item#tachi-upload-all-btn(data-tooltip="Send all scores to Tachi, ignoring last export time" data-tooltip-position="right")
+                        span.icon
+                          i.mdi.mdi-upload-multiple
+                        |  Force Full Export
                       a.dropdown-item#tachi-import-btn(data-tooltip="Pull personal bests from Tachi into Asphyxia" data-tooltip-position="right")
                         span.icon
                           i.mdi.mdi-download
@@ -158,6 +162,14 @@ script.
       5: 'PERFECT ULTIMATE CHAIN',
       6: 'MAXXIVE CLEAR'
     };
+    var CLEAR_TO_LAMP_NABLA = {
+      1: 'FAILED',
+      2: 'CLEAR',
+      3: 'EXCESSIVE CLEAR',
+      4: 'MAXXIVE CLEAR',
+      5: 'ULTIMATE CHAIN',
+      6: 'PERFECT ULTIMATE CHAIN'
+    };
 
 
     function getDifficulty(musicid, type) {
@@ -229,9 +241,11 @@ script.
       return 0;
     }
 
-    function computeVF(score, level, clear) {
-      var clearFactors = { 1: 0.5, 2: 1.0, 3: 1.02, 6: 1.05, 4: 1.05, 5: 1.10 };
-      var cf = clearFactors[clear] || 0.5;
+    function computeVF(score, level, clear, version) {
+      var clearFactorsEG = { 1: 0.5, 2: 1.0, 3: 1.02, 6: 1.05, 4: 1.05, 5: 1.10 };
+      var clearFactorsNabla = { 1: 0.5, 2: 1.0, 3: 1.02, 4: 1.04, 5: 1.06, 6: 1.10 };
+      var factors = version === 7 ? clearFactorsNabla : clearFactorsEG;
+      var cf = factors[clear] || 0.5;
       var gf = 1.0;
       if (score >= 9900000) gf = 1.05;
       else if (score >= 9800000) gf = 1.02;
@@ -244,7 +258,8 @@ script.
       return (score / 10000000) * level * cf * gf;
     }
 
-    var CLEAR_NAMES = { 1: 'FAILED', 2: 'CLEAR', 3: 'EXC', 4: 'UC', 5: 'PUC', 6: 'MXV' };
+    var CLEAR_NAMES_EG = { 1: 'FAILED', 2: 'CLEAR', 3: 'EXC', 4: 'UC', 5: 'PUC', 6: 'MXV' };
+    var CLEAR_NAMES_NABLA = { 1: 'FAILED', 2: 'CLEAR', 3: 'EXC', 4: 'MXV', 5: 'UC', 6: 'PUC' };
 
     function renderPBTable(scores) {
       var html = '<div style="max-height:500px;overflow:auto;">';
@@ -268,12 +283,13 @@ script.
           return;
         }
         var scoresRaw = JSON.parse(document.getElementById('data-pass-scores').textContent);
-        var v6 = scoresRaw.filter(function(s) { return s.version === 6; });
-        var enriched = v6.map(function(s) {
+        var supported = scoresRaw.filter(function(s) { return s.version === 6 || s.version === 7; });
+        var enriched = supported.map(function(s) {
           var diff = getDifficulty(s.mid, s.type) || '?';
           var level = getDiffLevel(s.mid, s.type);
-          var vf = computeVF(s.score, level, s.clear);
-          return { name: getSongName(s.mid), diff: diff, level: level, score: s.score, lamp: CLEAR_NAMES[s.clear] || String(s.clear), vf: vf };
+          var vf = computeVF(s.score, level, s.clear, s.version);
+          var clearNames = s.version === 7 ? CLEAR_NAMES_NABLA : CLEAR_NAMES_EG;
+          return { name: getSongName(s.mid), diff: diff, level: level, score: s.score, lamp: clearNames[s.clear] || String(s.clear), vf: vf };
         });
         enriched.sort(function(a, b) { return b.vf - a.vf; });
         var top50 = enriched.slice(0, 50);
@@ -329,9 +345,19 @@ script.
         .then(function() { checkStatus(); });
     });
 
-    function buildTachiScores() {
+    function parseTimestamp(ts) {
+      if (!ts) return null;
+      if (typeof ts === 'number') return ts;
+      if (typeof ts === 'string') { var d = new Date(ts).getTime(); return isNaN(d) ? null : d; }
+      if (ts.$$date != null) return ts.$$date;
+      if (ts instanceof Date || (typeof ts === 'object' && ts.getTime)) { var d = ts.getTime(); return isNaN(d) ? null : d; }
+      return null;
+    }
+
+    function buildTachiScores(since) {
       var scoresRaw = JSON.parse(document.getElementById('data-pass-scores').textContent);
       var versionCounts = {};
+      var skippedCount = 0;
       for (var i = 0; i < scoresRaw.length; i++) {
         var v = scoresRaw[i].version;
         versionCounts[v] = (versionCounts[v] || 0) + 1;
@@ -340,25 +366,18 @@ script.
       var tachiScores = [];
       for (var i = 0; i < scoresRaw.length; i++) {
         var s = scoresRaw[i];
-        if (s.version !== 6) continue;
-        var lamp = CLEAR_TO_LAMP_EG[s.clear];
+        if (s.version !== 6 && s.version !== 7) continue;
+        var lampMap = s.version === 7 ? CLEAR_TO_LAMP_NABLA : CLEAR_TO_LAMP_EG;
+        var lamp = lampMap[s.clear];
         if (!lamp) continue;
         var diff = getDifficulty(s.mid, s.type);
         if (!diff) continue;
 
-        var timeAchieved = null;
-        var ts = s.updatedAt || s.createdAt;
-        if (ts) {
-          if (typeof ts === 'number') {
-            timeAchieved = ts;
-          } else if (typeof ts === 'string') {
-            timeAchieved = new Date(ts).getTime();
-          } else if (ts.$$date != null) {
-            timeAchieved = ts.$$date;
-          } else if (ts instanceof Date || (typeof ts === 'object' && ts.getTime)) {
-            timeAchieved = ts.getTime();
-          }
-          if (timeAchieved != null && isNaN(timeAchieved)) timeAchieved = null;
+        var timeAchieved = parseTimestamp(s.updatedAt || s.createdAt);
+
+        if (since && timeAchieved && timeAchieved <= since) {
+          skippedCount++;
+          continue;
         }
 
         tachiScores.push({
@@ -371,7 +390,7 @@ script.
           _songName: getSongName(s.mid)
         });
       }
-      return { tachiScores: tachiScores, totalRaw: scoresRaw.length, versionCounts: versionCounts };
+      return { tachiScores: tachiScores, totalRaw: scoresRaw.length, versionCounts: versionCounts, skippedCount: skippedCount };
     }
 
     var previewBtn = document.getElementById('tachi-preview-btn');
@@ -389,7 +408,7 @@ script.
         html += 'v' + v + ': ' + result.versionCounts[v] + ' ';
       }
       html += '</p>';
-      html += '<p><strong>Exceed Gear (v6) scores to send:</strong> ' + result.tachiScores.length + '</p>';
+      html += '<p><strong>Scores to send:</strong> ' + result.tachiScores.length + '</p>';
       if (result.tachiScores.length > 0) {
         html += '<details open><summary>First 20 scores</summary>';
         html += '<div style="max-height:400px;overflow:auto;">';
@@ -411,69 +430,107 @@ script.
       showResult('info', html);
     });
 
-    document.getElementById('tachi-upload-btn').addEventListener('click', function(e) {
-      e.preventDefault();
-      dropdownEl.classList.remove('is-active');
+    function exportToTachi(forceAll) {
       var btn = document.getElementById('tachi-sync-btn');
       btn.classList.add('is-loading');
       btn.disabled = true;
 
-      var result = buildTachiScores();
-      var tachiScores = result.tachiScores;
-
-      if (tachiScores.length === 0) {
-        btn.classList.remove('is-loading');
-        btn.disabled = false;
-        showResult('warning', 'No Exceed Gear (v6) scores to upload. Versions found: ' + JSON.stringify(result.versionCounts));
-        return;
-      }
-
-      // Strip _songName before sending to Tachi
-      var cleanScores = tachiScores.map(function(s) { var c = Object.assign({}, s); delete c._songName; return c; });
-
-      console.log('Sending ' + cleanScores.length + ' scores to Tachi');
-      console.log('Sample score:', JSON.stringify(cleanScores[0]));
-
-      fetch('/tachi/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scores: cleanScores })
-      })
+      return fetch('/tachi/export-ts?refid=' + encodeURIComponent(refid))
         .then(function(r) { return r.json(); })
-        .then(function(data) {
-          btn.classList.remove('is-loading');
-          btn.disabled = false;
-          console.log('Tachi response:', JSON.stringify(data));
+        .then(function(tsData) {
+          var since = (!forceAll && tsData.success && tsData.timestamp) ? tsData.timestamp : null;
+          var result = buildTachiScores(since);
+          var tachiScores = result.tachiScores;
 
-          var html = '';
-          if (data.success) {
-            var body = data.body || {};
-            html += '<p class="has-text-success"><strong>Import successful!</strong></p>';
-            html += '<p>Scores sent: ' + tachiScores.length + '</p>';
-            if (body.scoreIDs) html += '<p>Scores imported: ' + body.scoreIDs.length + '</p>';
-            if (body.errors) html += '<p>Errors: ' + body.errors.length + '</p>';
-            if (body.errors && body.errors.length > 0) {
-              html += '<details><summary>Error details</summary><ul>';
-              for (var j = 0; j < Math.min(body.errors.length, 50); j++) {
-                html += '<li>' + (body.errors[j].message || JSON.stringify(body.errors[j])) + '</li>';
-              }
-              if (body.errors.length > 50) html += '<li>... and ' + (body.errors.length - 50) + ' more</li>';
-              html += '</ul></details>';
-            }
-          } else {
-            html += '<p class="has-text-danger"><strong>Import failed</strong></p>';
-            html += '<p>' + (data.description || 'Unknown error') + '</p>';
+          if (tachiScores.length === 0) {
+            btn.classList.remove('is-loading');
+            btn.disabled = false;
+            var msg = 'No scores to upload.';
+            if (since) msg = 'No new scores since last export (' + new Date(since).toLocaleString() + '). ' + result.skippedCount + ' scores already exported.';
+            return { success: true, _skipped: true, _message: msg, _result: result };
           }
-          html += '<details class="mt-3"><summary>Raw API Response</summary>';
-          html += '<pre style="max-height:300px;overflow:auto;font-size:0.75em;background:#1a1a1e;color:#ddd;padding:0.5em;border-radius:4px;white-space:pre-wrap;">' + JSON.stringify(data, null, 2) + '</pre>';
-          html += '</details>';
-          showResult(data.success ? 'success' : 'danger', html);
+
+          var cleanScores = tachiScores.map(function(s) { var c = Object.assign({}, s); delete c._songName; return c; });
+
+          console.log('Sending ' + cleanScores.length + ' scores to Tachi' + (result.skippedCount > 0 ? ' (skipped ' + result.skippedCount + ' already exported)' : ''));
+
+          return fetch('/tachi/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scores: cleanScores })
+          })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              console.log('Tachi response:', JSON.stringify(data));
+              if (data.success) {
+                // Save export timestamp
+                return fetch('/tachi/save-export-ts', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ refid: refid })
+                }).then(function() { return data; });
+              }
+              return data;
+            })
+            .then(function(data) {
+              btn.classList.remove('is-loading');
+              btn.disabled = false;
+              return { success: data.success, data: data, scoresSent: tachiScores.length, skippedCount: result.skippedCount, _result: result };
+            });
         })
         .catch(function(err) {
           btn.classList.remove('is-loading');
           btn.disabled = false;
-          showResult('danger', '<strong>Error:</strong> ' + err.message);
+          throw err;
         });
+    }
+
+    function showExportResult(exportResult) {
+      if (exportResult._skipped) {
+        showResult('info', exportResult._message);
+        return;
+      }
+      var data = exportResult.data;
+      var html = '';
+      if (data.success) {
+        var body = data.body || {};
+        html += '<p class="has-text-success"><strong>Import successful!</strong></p>';
+        html += '<p>Scores sent: ' + exportResult.scoresSent + '</p>';
+        if (exportResult.skippedCount > 0) html += '<p>Skipped (already exported): ' + exportResult.skippedCount + '</p>';
+        if (body.scoreIDs) html += '<p>Scores imported: ' + body.scoreIDs.length + '</p>';
+        if (body.errors) html += '<p>Errors: ' + body.errors.length + '</p>';
+        if (body.errors && body.errors.length > 0) {
+          html += '<details><summary>Error details</summary><ul>';
+          for (var j = 0; j < Math.min(body.errors.length, 50); j++) {
+            html += '<li>' + (body.errors[j].message || JSON.stringify(body.errors[j])) + '</li>';
+          }
+          if (body.errors.length > 50) html += '<li>... and ' + (body.errors.length - 50) + ' more</li>';
+          html += '</ul></details>';
+        }
+      } else {
+        html += '<p class="has-text-danger"><strong>Import failed</strong></p>';
+        html += '<p>' + (data.description || 'Unknown error') + '</p>';
+      }
+      html += '<details class="mt-3"><summary>Raw API Response</summary>';
+      html += '<pre style="max-height:300px;overflow:auto;font-size:0.75em;background:#1a1a1e;color:#ddd;padding:0.5em;border-radius:4px;white-space:pre-wrap;">' + JSON.stringify(data, null, 2) + '</pre>';
+      html += '</details>';
+      showResult(data.success ? 'success' : 'danger', html);
+    }
+
+    document.getElementById('tachi-upload-btn').addEventListener('click', function(e) {
+      e.preventDefault();
+      dropdownEl.classList.remove('is-active');
+      exportToTachi(false).then(showExportResult).catch(function(err) {
+        showResult('danger', '<strong>Error:</strong> ' + err.message);
+      });
+    });
+
+    document.getElementById('tachi-upload-all-btn').addEventListener('click', function(e) {
+      e.preventDefault();
+      dropdownEl.classList.remove('is-active');
+      exportToTachi(true).then(showExportResult).catch(function(err) {
+        showResult('danger', '<strong>Error:</strong> ' + err.message);
+      });
     });
 
     // Import from Tachi: fetch best 50 PBs and save to Asphyxia DB
@@ -548,37 +605,21 @@ script.
         });
     });
 
-    // Synchronize: export to Tachi + import from Tachi
+    // Synchronize: import from Tachi + export new scores to Tachi
     document.getElementById('tachi-sync-btn').addEventListener('click', function() {
       var btn = this;
       btn.classList.add('is-loading');
       btn.disabled = true;
 
-      var syncHtml = '<p><strong>Synchronizing...</strong></p>';
-      showResult('info', syncHtml);
+      showResult('info', '<p><strong>Synchronizing...</strong></p>');
 
       // Step 1: Import from Tachi
       importFromTachi()
         .then(function(importResult) {
-          // Step 2: Export to Tachi (only after import is done)
-          var result = buildTachiScores();
-          var cleanScores = result.tachiScores.map(function(s) { var c = Object.assign({}, s); delete c._songName; return c; });
-
-          var exportPromise;
-          if (cleanScores.length > 0) {
-            exportPromise = fetch('/tachi/import', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ scores: cleanScores })
-            }).then(function(r) { return r.json(); });
-          } else {
-            exportPromise = Promise.resolve({ success: true, body: { scoreIDs: [], errors: [] }, _skipped: true });
-          }
-
-          return exportPromise.then(function(exportResult) {
-            btn.classList.remove('is-loading');
-            btn.disabled = false;
-
+          // Step 2: Export to Tachi (only new scores)
+          btn.classList.remove('is-loading');
+          btn.disabled = false;
+          return exportToTachi(false).then(function(exportResult) {
             var html = '<p class="has-text-success"><strong>Synchronization complete!</strong></p>';
             html += '<hr>';
 
@@ -597,14 +638,15 @@ script.
             // Export summary
             html += '<p><strong>Export to Tachi:</strong></p>';
             if (exportResult._skipped) {
-              html += '<p>No Exceed Gear (v6) scores to export.</p>';
-            } else if (exportResult.success) {
-              var ebody = exportResult.body || {};
-              html += '<p>Scores sent: ' + cleanScores.length + '</p>';
+              html += '<p>' + exportResult._message + '</p>';
+            } else if (exportResult.data.success) {
+              var ebody = exportResult.data.body || {};
+              html += '<p>Scores sent: ' + exportResult.scoresSent + '</p>';
+              if (exportResult.skippedCount > 0) html += '<p>Skipped (already exported): ' + exportResult.skippedCount + '</p>';
               if (ebody.scoreIDs) html += '<p>New scores on Tachi: ' + ebody.scoreIDs.length + '</p>';
               if (ebody.errors && ebody.errors.length > 0) html += '<p>Errors: ' + ebody.errors.length + '</p>';
             } else {
-              html += '<p class="has-text-danger">Export failed: ' + (exportResult.description || 'Unknown error') + '</p>';
+              html += '<p class="has-text-danger">Export failed: ' + (exportResult.data.description || 'Unknown error') + '</p>';
             }
 
             if (importResult.imported > 0) html += '<p class="mt-2"><em>Reload the page to see updated scores.</em></p>';
