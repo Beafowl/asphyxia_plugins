@@ -61,7 +61,15 @@ script.
         resultDiv.style.display = 'block';
         if (data.success) {
           resultDiv.className = 'notification is-success is-light';
-          resultDiv.innerHTML = '<strong>Done!</strong> Processed ' + data.total + ' scores, updated ' + data.updated + ' volforce values.';
+          var msg = '';
+          if (data.migrated) {
+            msg += '<strong>Migration complete!</strong> Your Exceed Gear (v6) data has been migrated to Nabla (v7).<br>';
+          }
+          msg += '<strong>Done!</strong> Processed ' + data.total + ' scores, updated ' + data.updated + ' volforce values.';
+          if (data.migrated) {
+            msg += '<br><br><em>Reload the page to see Nabla in the version selector on the Detail tab.</em>';
+          }
+          resultDiv.innerHTML = msg;
         } else {
           resultDiv.className = 'notification is-danger is-light';
           resultDiv.innerHTML = '<strong>Error:</strong> ' + (data.description || 'Unknown error');
