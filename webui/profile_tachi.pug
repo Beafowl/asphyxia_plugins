@@ -2,6 +2,14 @@
   scores: DB.Find(refid, { collection: 'music' })
 -
 div
+  #tachi-controller-warning.notification(style="background-color:rgba(183,149,19,0.25);color:#f5e6ab;border-left:4px solid #b79513;")
+    button.delete(onclick="document.getElementById('tachi-controller-warning').style.display='none';localStorage.setItem('tachi-warning-dismissed','1');")
+    p
+      strong Scores must be achieved on an arcade-size controller!
+    p Playing on other input devices (like a keyboard) will get you in trouble.
+    p
+      strong A Pocket-Voltex DOES NOT count as an #[em ARCADE SIZE] controller!
+
   .card
     .card-header
       p.card-header-title
@@ -68,6 +76,10 @@ div
               span.icon
                 i.mdi.mdi-link-off
               span Disconnect
+        .field.mt-4
+          label.checkbox#tachi-auto-export-label
+            input(type="checkbox" id="tachi-auto-export-check")
+            |  Automatically export scores to Tachi after each play
 
       #tachi-result(style="display:none")
         .card.mt-4
@@ -104,6 +116,11 @@ div(hidden id='data-pass-scores') !{JSON.stringify(scores)}
 
 script.
   (function() {
+    if (localStorage.getItem('tachi-warning-dismissed') === '1') {
+      var w = document.getElementById('tachi-controller-warning');
+      if (w) w.style.display = 'none';
+    }
+
     if (typeof isOwner !== 'undefined' && !isOwner) {
       document.getElementById('tachi-status').style.display = 'none';
       document.getElementById('tachi-not-authorized').style.display = 'none';
@@ -204,6 +221,7 @@ script.
             document.getElementById('tachi-authorized').style.display = '';
             document.getElementById('tachi-not-authorized').style.display = 'none';
             loadPBLists();
+            loadAutoExportState();
           } else {
             document.getElementById('tachi-not-authorized').style.display = '';
             document.getElementById('tachi-authorized').style.display = 'none';
@@ -214,6 +232,35 @@ script.
             '<div class="notification is-danger is-light">Failed to check Tachi status.</div>';
         });
     }
+
+    function loadAutoExportState() {
+      fetch('/tachi/auto-export?refid=' + encodeURIComponent(refid))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            document.getElementById('tachi-auto-export-check').checked = data.enabled;
+          }
+        })
+        .catch(function() {});
+    }
+
+    document.getElementById('tachi-auto-export-check').addEventListener('change', function() {
+      var enabled = this.checked;
+      fetch('/tachi/auto-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refid: refid, enabled: enabled })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.success) {
+            document.getElementById('tachi-auto-export-check').checked = !enabled;
+          }
+        })
+        .catch(function() {
+          document.getElementById('tachi-auto-export-check').checked = !enabled;
+        });
+    });
 
     checkStatus();
 
@@ -289,10 +336,20 @@ script.
           var level = getDiffLevel(s.mid, s.type);
           var vf = computeVF(s.score, level, s.clear, s.version);
           var clearNames = s.version === 7 ? CLEAR_NAMES_NABLA : CLEAR_NAMES_EG;
-          return { name: getSongName(s.mid), diff: diff, level: level, score: s.score, lamp: clearNames[s.clear] || String(s.clear), vf: vf };
+          return { mid: s.mid, type: s.type, name: getSongName(s.mid), diff: diff, level: level, score: s.score, lamp: clearNames[s.clear] || String(s.clear), vf: vf };
         });
-        enriched.sort(function(a, b) { return b.vf - a.vf; });
-        var top50 = enriched.slice(0, 50);
+        // Deduplicate by (mid, type) keeping the entry with higher VF
+        var bestByChart = {};
+        for (var i = 0; i < enriched.length; i++) {
+          var key = enriched[i].mid + '_' + enriched[i].type;
+          if (!bestByChart[key] || enriched[i].vf > bestByChart[key].vf) {
+            bestByChart[key] = enriched[i];
+          }
+        }
+        var deduped = [];
+        for (var k in bestByChart) deduped.push(bestByChart[k]);
+        deduped.sort(function(a, b) { return b.vf - a.vf; });
+        var top50 = deduped.slice(0, 50);
         document.getElementById('asphyxia-pb-table').innerHTML = top50.length > 0 ? renderPBTable(top50) : '<p class="has-text-grey">No scores found.</p>';
       }
       loadAsphyxiaPBs();
