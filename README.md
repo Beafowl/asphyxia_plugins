@@ -21,7 +21,31 @@ Important notes for players migrating from EXCEED GEAR to ∇
 - Just a heads up that there is a bug in game version 20251224 that causes charts to not appear in the VOLFORCE POTENTIAL folder.
 - Charts announced to have EX SCORES reset will be reset here as well.
 
-Changelog
+Fork Changes (asphyxia-core fork)
+===========
+These changes are specific to the [asphyxia-core fork](https://github.com/Beafowl/asphyxia-core) and are not part of the upstream 22vv0 plugin.
+
+### Tachi Integration
+- Added OAuth flow for [Kamaitachi](https://kamai.tachi.ac) score sync
+- Bidirectional score import/export with Tachi API
+- Automatic score export to Tachi on each play (opt-in toggle)
+- Best 50 PB comparison (Asphyxia vs Tachi)
+- Arcade-size controller warning on Tachi tab
+- Tachi client ID is now fetched from server `config.ini` instead of being hardcoded
+- Score timestamps (`timeAchieved`) are preserved during Tachi import/export
+- Fixed MXV lamp mapping: exports as MAXXIVE CLEAR instead of EXCESSIVE CLEAR
+- Restricted Tachi tab to profile owner only
+
+### Nabla (v7) Support
+- Added Nabla v7 score export support for Tachi
+- Added volforce recalculation page
+- Fixed clear coefficients for Nabla
+
+### Setup (requires core fork)
+- Tachi OAuth client ID and secret must be set in the core's `config.ini`
+- The Tachi tab and score sync features require the corresponding core-side routes
+
+Changelog (upstream 22vv0)
 ===========
 ### fork-7.0.1
 
