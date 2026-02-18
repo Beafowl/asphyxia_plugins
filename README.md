@@ -36,6 +36,9 @@ These changes are specific to the [asphyxia-core fork](https://github.com/Beafow
 - Fixed MXV lamp mapping: exports as MAXXIVE CLEAR instead of EXCESSIVE CLEAR
 - Restricted Tachi tab to profile owner only
 
+### Score Migration
+- Added "Migrate Scores to Another Server" export feature: downloads a `savedata.zip` containing only the user's profile, cards, and SDVX data for importing on another Asphyxia server
+
 ### Nabla (v7) Support
 - Added Nabla v7 score export support for Tachi
 - Added volforce recalculation page

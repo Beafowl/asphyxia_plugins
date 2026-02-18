@@ -45,6 +45,23 @@ div
 
       #migrate-result(style="display:none")
 
+  .card(style="margin-top: 1.5rem;")
+    .card-header
+      p.card-header-title
+        span.icon
+          i.mdi.mdi-database-export
+        | Migrate Scores to Another Server
+    .card-content
+      .content
+        p Export your profile and scores as a #[code savedata.zip] file that can be imported on another Asphyxia server. The zip contains only your data.
+
+      #export-section
+        .field
+          button.button.is-link#export-savedata-btn
+            span.icon
+              i.mdi.mdi-download
+            span Download savedata.zip
+
 script.
   (function() {
     if (typeof isOwner !== 'undefined' && !isOwner) {
@@ -270,5 +287,19 @@ script.
         btn.disabled = false;
         showResult('danger', '<strong>Error:</strong> ' + err.message);
       });
+    });
+
+    // Export savedata handler
+    document.getElementById('export-savedata-btn').addEventListener('click', function() {
+      var btn = this;
+      btn.classList.add('is-loading');
+      btn.disabled = true;
+
+      window.location.href = '/migrate/export-savedata?refid=' + encodeURIComponent(refid);
+
+      setTimeout(function() {
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+      }, 3000);
     });
   })();
