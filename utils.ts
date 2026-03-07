@@ -29,6 +29,49 @@ export function getRandomIntInclusive(min, max) {
   return Math.floor(Math.random() * (max - min + 1) + min); //The maximum is inclusive and the minimum is inclusive
 }
 
+let musicDbCache: any = null;
+let validMidSet: Set<string> | null = null;
+let musicDbLoadFailed = false;
+
+export async function loadMusicDb() {
+  if (musicDbCache) return musicDbCache;
+  if (musicDbLoadFailed) return null;
+  try {
+    const buf = await IO.ReadFile('webui/asset/json/music_db.json');
+    if (!buf) {
+      musicDbLoadFailed = true;
+      return null;
+    }
+    const mdb = JSON.parse(U.DecodeString(buf, 'utf8'));
+
+    // Merge custom songs if file exists
+    if (IO.Exists('webui/asset/json/custom_music_db.json')) {
+      try {
+        const customBuf = await IO.ReadFile('webui/asset/json/custom_music_db.json');
+        if (customBuf) {
+          const customDb = JSON.parse(U.DecodeString(customBuf, 'utf8'));
+          if (customDb?.mdb?.music?.length) {
+            mdb.mdb.music = mdb.mdb.music.concat(customDb.mdb.music);
+          }
+        }
+      } catch {}
+    }
+
+    // Build valid MID lookup set
+    validMidSet = new Set(mdb.mdb.music.map((s: any) => String(s.id)));
+
+    musicDbCache = mdb;
+    return musicDbCache;
+  } catch {}
+  musicDbLoadFailed = true;
+  return null;
+}
+
+export function isValidMid(mid: number): boolean {
+  if (!validMidSet) return true; // If DB failed to load, don't block scores
+  return validMidSet.has(String(mid));
+}
+
 export function computeForce(diff, score, medal, grade) {
   // computing force with Nabla values
   const medalCoef = [0, 0.5, 1.0, 1.02, 1.04, 1.06, 1.1];

@@ -36,6 +36,13 @@ These changes are specific to the [asphyxia-core fork](https://github.com/Beafow
 - Fixed MXV lamp mapping: exports as MAXXIVE CLEAR instead of EXCESSIVE CLEAR
 - Restricted Tachi tab to profile owner only
 
+### Custom Songs & MID Validation
+- Added `custom_music_db.json` support: add custom songs (MID 10000+) in the same format as `music_db.json`, merged at load time
+- Scores for unknown MIDs (not in `music_db.json` or `custom_music_db.json`) are now silently rejected
+- Centralized music DB loading into a shared `loadMusicDb()` utility used by all handlers
+- Volforce recalculation now reads from the plugin folder instead of root `music_db.json`
+- WebUI pages merge custom songs for display
+
 ### Score Migration
 - Added "Migrate Scores to Another Server" export feature: downloads a `savedata.zip` containing only the user's profile, cards, and SDVX data for importing on another Asphyxia server
 

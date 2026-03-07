@@ -8,7 +8,7 @@ import { Profile } from '../models/profile';
 import { ValgeneTicket } from '../models/valgene_ticket';
 import { WeeklyMusicScore } from '../models/weeklymusic';
 import { VariantPower } from '../models/variant';
-import { getVersion, IDToCode } from '../utils';
+import { getVersion, IDToCode, loadMusicDb, isValidMid } from '../utils';
 import { Mix } from '../models/mix';
 import { CURRENT_ARENA, EVENT_ITEMS6, UNLOCK_EVENTS6 } from '../data/exg';
 import { CURRENT_ARENA7, EVENT_ITEMS7, UNLOCK_EVENTS7 } from '../data/nbl';
@@ -148,11 +148,15 @@ export const saveScore: EPR = async (info, data, send) => {
 
   if (version === -6 || version === 7) {
     // Using alternate scoring system after 20210831
+    await loadMusicDb(); // Ensure music DB is loaded for MID validation
     const tracks = $(data).elements('track');
     for (const i of tracks) {
       const mid = i.number('music_id');
       const type = i.number('music_type');
       if (_.isNil(mid) || _.isNil(type)) return send.deny();
+
+      // Skip scores for songs not in music database
+      if (!isValidMid(mid)) continue;
 
       const record = (await DB.FindOne<MusicRecord>(refid, {
         collection: 'music',
@@ -239,23 +243,6 @@ const CLEAR_TO_LAMP_NABLA: Record<number, string> = {
   5: 'ULTIMATE CHAIN',
   6: 'PERFECT ULTIMATE CHAIN',
 };
-
-let musicDbCache: any = null;
-let musicDbLoadFailed = false;
-
-async function loadMusicDb() {
-  if (musicDbCache) return musicDbCache;
-  if (musicDbLoadFailed) return null;
-  try {
-    const buf = await IO.ReadFile('webui/asset/json/music_db.json');
-    if (buf) {
-      musicDbCache = JSON.parse(U.DecodeString(buf, 'utf8'));
-      return musicDbCache;
-    }
-  } catch {}
-  musicDbLoadFailed = true;
-  return null;
-}
 
 function getTachiDifficulty(mid: number, type: number, musicDb: any): string | null {
   if (type === 0) return 'NOV';
