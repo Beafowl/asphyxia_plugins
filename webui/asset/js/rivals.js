@@ -1,6 +1,7 @@
 var urlParams;
 var currentVersion;
 var currentProfile;
+var refid;
 var versionText = [
   '',
   'BOOTH',
@@ -161,6 +162,7 @@ $(document).ready(async function () {
       ? parseInt(urlParams.get('version'))
       : your_profile_data[your_profile_data.length - 1].version;
   currentProfile = your_profile_data.find(p => p.version === currentVersion);
+  refid = currentProfile.__refid;
 
   profiles_data_filtered = profiles_data.filter(
     p =>
