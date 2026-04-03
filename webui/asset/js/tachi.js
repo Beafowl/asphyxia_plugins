@@ -4,16 +4,31 @@ window.Tachi = (function() {
   var music_db_loaded = false;
   var music_db_error = false;
 
-  $.getJSON("static/asset/json/music_db.json")
-    .done(function(json) {
-      music_db = json;
-      music_db_loaded = true;
-      console.log('music_db loaded, entries:', music_db["mdb"]["music"].length);
-    })
-    .fail(function(jqxhr, textStatus, error) {
-      music_db_error = true;
-      console.error('Failed to load music_db.json:', textStatus, error);
-    });
+  // Load music_db - use fetch as fallback if jQuery isn't available yet
+  if (typeof $ !== 'undefined' && $.getJSON) {
+    $.getJSON("static/asset/json/music_db.json")
+      .done(function(json) {
+        music_db = json;
+        music_db_loaded = true;
+        console.log('music_db loaded, entries:', music_db["mdb"]["music"].length);
+      })
+      .fail(function(jqxhr, textStatus, error) {
+        music_db_error = true;
+        console.error('Failed to load music_db.json:', textStatus, error);
+      });
+  } else {
+    fetch("static/asset/json/music_db.json")
+      .then(function(r) { return r.json(); })
+      .then(function(json) {
+        music_db = json;
+        music_db_loaded = true;
+        console.log('music_db loaded, entries:', music_db["mdb"]["music"].length);
+      })
+      .catch(function(err) {
+        music_db_error = true;
+        console.error('Failed to load music_db.json:', err);
+      });
+  }
 
   // Clear type to Tachi lamp mapping
   // SDVX EG (version 6): 0=none, 1=played, 2=clear, 3=excessive, 4=uc, 5=puc, 6=mxv
@@ -176,10 +191,14 @@ window.Tachi = (function() {
   function initAuth(authorizeBtn, disconnectBtn, configHandle, onStatusChange) {
     if (authorizeBtn) {
       authorizeBtn.addEventListener('click', function() {
-        window.open(
-          'https://kamai.tachi.ac/oauth/request-auth?clientID=' + configHandle.getClientId(),
-          'tachi_auth', 'width=600,height=700'
-        );
+        var clientId = configHandle.getClientId();
+        var url = 'https://kamai.tachi.ac/oauth/request-auth?clientID=' + clientId;
+        console.log('[Tachi] Authorize clicked, clientId:', clientId, 'url:', url);
+        var popup = window.open(url, 'tachi_auth', 'width=600,height=700');
+        if (!popup) {
+          console.error('[Tachi] Popup was blocked by browser');
+          alert('Popup was blocked. Please allow popups for this site.');
+        }
       });
     }
     if (disconnectBtn) {
@@ -191,6 +210,7 @@ window.Tachi = (function() {
     }
     window.addEventListener('message', function(event) {
       if (event.data && event.data.type === 'tachi-auth' && event.data.code) {
+        console.log('[Tachi] Received auth code via postMessage');
         fetch('/tachi/exchange', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -198,7 +218,16 @@ window.Tachi = (function() {
         })
           .then(function(r) { return r.json(); })
           .then(function(data) {
-            if (data.success && onStatusChange) onStatusChange();
+            console.log('[Tachi] Exchange result:', data);
+            if (data.success) {
+              if (onStatusChange) onStatusChange();
+            } else {
+              console.error('[Tachi] Exchange failed:', data.description);
+              alert('Tachi authorization failed: ' + (data.description || 'Unknown error'));
+            }
+          })
+          .catch(function(err) {
+            console.error('[Tachi] Exchange error:', err);
           });
       }
     });
