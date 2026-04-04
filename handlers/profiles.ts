@@ -206,7 +206,10 @@ export const saveScore: EPR = async (info, data, send) => {
             : oldClear;
       } else {
         // nabla switched clear lamp ids for mxv, uc and puc so it is in chronological order.
-        record.clear = Math.max(i.number('clear_type', 0), record.clear);
+        let newClear = i.number('clear_type', 0);
+        // PUC (clear=6) requires a perfect 10,000,000 score; downgrade to MXV if not met
+        if (newClear === 6 && score < 10000000) newClear = 4;
+        record.clear = Math.max(newClear, record.clear);
       }
       record.grade = Math.max(i.number('score_grade', 0), record.grade);
 

@@ -388,7 +388,118 @@ function calculateVolforce() {
   return toFixed(VF, 3);
 }
 
+var vf50Refid = '';
+var vf50CanEdit = false;
+
+// Clear type options for Nabla (v7)
+var clearOptions = [
+  { value: 1, label: 'PLAYED' },
+  { value: 2, label: 'EFFECTIVE CLEAR' },
+  { value: 3, label: 'EXCESSIVE CLEAR' },
+  { value: 4, label: 'MAXXIVE CLEAR' },
+  { value: 5, label: 'UC' },
+  { value: 6, label: 'PUC' },
+];
+
+function clearValueFromLabel(label) {
+  var opt = clearOptions.find(function (o) { return o.label === label; });
+  return opt ? opt.value : -1;
+}
+
+function saveScoreEdit(mid, type, field, value, cell) {
+  var payload = {
+    refid: vf50Refid,
+    mid: mid,
+    type: type,
+    version: currentVersion,
+  };
+  payload[field] = value;
+
+  emit('updateScore', payload).then(function (response) {
+    if (!response || !response.data || !response.data.success) {
+      var msg = (response && response.data && response.data.error) || 'Update failed';
+      alert(msg);
+      reloadVF50();
+      return;
+    }
+    // Update score_db in memory
+    var rec = response.data.record;
+    if (rec) {
+      var idx = score_db.findIndex(function (s) {
+        return s.mid === mid && s.type === type && s.version === currentVersion;
+      });
+      if (idx >= 0) {
+        score_db[idx] = rec;
+      }
+    }
+    reloadVF50();
+  });
+}
+
+function reloadVF50() {
+  var dt = $('#volforce50').DataTable();
+  dt.clear().destroy();
+  $('#volforce50 tbody').empty();
+  getVF50();
+}
+
+function makeEditableCell(td, value, mid, type, field, options) {
+  if (!vf50CanEdit) return;
+  $(td).css('cursor', 'pointer');
+  $(td).on('click', function () {
+    if ($(this).find('input, select').length > 0) return;
+    var original = $(this).text();
+    var $input;
+
+    if (options) {
+      $input = $('<select class="input is-small">');
+      for (var i = 0; i < options.length; i++) {
+        var opt = options[i];
+        var $opt = $('<option>').val(opt.label).text(opt.label);
+        if (opt.label === original) $opt.attr('selected', true);
+        $input.append($opt);
+      }
+    } else {
+      $input = $('<input class="input is-small" type="number">');
+      $input.val(value);
+      if (field === 'score') {
+        $input.attr('min', 0).attr('max', 10000000);
+      }
+    }
+
+    $(this).empty().append($input);
+    $input.focus();
+
+    function commit() {
+      var newVal;
+      if (options) {
+        newVal = clearValueFromLabel($input.val());
+        if (newVal === -1) { reloadVF50(); return; }
+        saveScoreEdit(mid, type, field, newVal, td);
+      } else {
+        newVal = parseInt($input.val());
+        if (isNaN(newVal)) { reloadVF50(); return; }
+        if (field === 'score' && (newVal < 0 || newVal > 10000000)) {
+          alert('Score must be between 0 and 10,000,000');
+          reloadVF50();
+          return;
+        }
+        saveScoreEdit(mid, type, field, newVal, td);
+      }
+    }
+
+    $input.on('blur', commit);
+    $input.on('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { reloadVF50(); }
+    });
+  });
+}
+
 function getVF50() {
+  vf50Refid = typeof refid !== 'undefined' ? refid : '';
+  vf50CanEdit = typeof canEdit !== 'undefined' ? canEdit : false;
+
   let top50 = [];
   for (var sc of score_db.filter(sc => sc.version === currentVersion)) {
     let sinf = getSongInfo(sc.mid);
@@ -397,8 +508,11 @@ function getVF50() {
         name: sinf.name,
         diff: getDifficulty(sinf.id, sc.type) + ' ' + getDifficultyNum(sinf.id, sc.type),
         clear: getMedal(true, sc.clear, currentVersion),
+        clearRaw: sc.clear,
         score: sc.score,
         vf: parseFloat(toFixed(singleScoreVolforce(sc, currentVersion), 1)),
+        mid: sc.mid,
+        type: sc.type,
       });
     }
   }
@@ -417,8 +531,18 @@ function getVF50() {
       { data: 'num' },
       { data: 'name' },
       { data: 'diff' },
-      { data: 'clear' },
-      { data: 'score' },
+      {
+        data: 'clear',
+        createdCell: function (td, cellData, rowData) {
+          makeEditableCell(td, rowData.clearRaw, rowData.mid, rowData.type, 'clear', clearOptions);
+        },
+      },
+      {
+        data: 'score',
+        createdCell: function (td, cellData, rowData) {
+          makeEditableCell(td, rowData.score, rowData.mid, rowData.type, 'score', null);
+        },
+      },
       { data: 'vf' },
     ],
   });

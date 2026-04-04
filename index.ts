@@ -10,7 +10,8 @@ import {
   manageEvents,
   manageStartupFlags,
   addWeekly,
-  getWeekRankList
+  getWeekRankList,
+  updateScore
 } from './handlers/webui';
 import {
   load,
@@ -51,6 +52,7 @@ export function register() {
   R.WebUIEvent('manageEvents', manageEvents);
   R.WebUIEvent('manageStartupFlags', manageStartupFlags);
   R.WebUIEvent('updateProfile', updateProfile);
+  R.WebUIEvent('updateScore', updateScore);
   R.WebUIEvent('addWeekly', addWeekly);
   R.WebUIEvent('getWeekRankList', getWeekRankList);
 

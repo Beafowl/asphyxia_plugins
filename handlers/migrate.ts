@@ -55,6 +55,7 @@ export async function dataUpdate() {
 
   await updateSkillCourseIds();
   await updateDB();
+  await repairNablaPucClears();
 }
 
 async function updateSkillCourseIds() {
@@ -394,4 +395,44 @@ export async function nablaMigrate(refid) {
       );
     }
   });
+}
+
+// Repair v7 records where clear=6 (PUC) but score < 10,000,000.
+// Score is the source of truth — if it's not 10M, the lamp can't be PUC.
+// Downgrade to MXV (clear=4) and recompute volforce.
+async function repairNablaPucClears() {
+  const badRecords = await DB.Find<MusicRecord>(null, {
+    collection: 'music',
+    version: 7,
+    clear: 6,
+    score: { $lt: 10000000 },
+  });
+
+  if (badRecords.length === 0) return;
+
+  const mdb = await loadMusicDb();
+  const diffName = ['novice', 'advanced', 'exhaust', 'infinite', 'maximum', 'ultimate'];
+
+  console.log(`Repairing ${badRecords.length} Nabla records: PUC -> MXV (score < 10M)`);
+
+  for (const rec of badRecords) {
+    let volforce = rec.volforce;
+    if (mdb) {
+      const song = mdb.mdb.music.find((s: any) => String(s.id) === String(rec.mid));
+      if (song) {
+        const diffLevel = parseFloat(song.difficulty?.[diffName[rec.type]]) || 0;
+        if (diffLevel > 0) {
+          volforce = computeForce(diffLevel, rec.score, 4, rec.grade);
+        }
+      }
+    }
+
+    await DB.Update<MusicRecord>(
+      rec['__refid'],
+      { collection: 'music', mid: rec.mid, type: rec.type, version: 7 },
+      { $set: { clear: 4, volforce } }
+    );
+  }
+
+  console.log(`Repaired ${badRecords.length} Nabla PUC -> MXV records`);
 }

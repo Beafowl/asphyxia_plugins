@@ -2,7 +2,7 @@ import { Profile } from '../models/profile'
 import { MusicRecord } from '../models/music_record'
 import { ValgeneTicket } from '../models/valgene_ticket'
 import { Skill } from '../models/skill'
-import { getVersion, IDToCode, GetCounter } from '../utils'
+import { getVersion, IDToCode, GetCounter, computeForce, loadMusicDb } from '../utils'
 import { Mix } from '../models/mix'
 import { Rival } from '../models/rival'
 import { Item } from '../models/item'
@@ -828,4 +828,105 @@ export async function getRankListDB(week, mid, mtype, version) {
     }))
   } 
   return jRankResults
+}
+
+export const updateScore = async (data: {
+  refid: string;
+  mid: number;
+  type: number;
+  version: number;
+  clear?: number;
+  score?: number;
+}, send: WebUISend) => {
+  if (!data.refid || data.mid == null || data.type == null || data.version == null) {
+    return send.json({ success: false, error: 'Missing required fields' });
+  }
+
+  const mid = parseInt(String(data.mid));
+  const type = parseInt(String(data.type));
+  const version = parseInt(String(data.version));
+
+  const record = await DB.FindOne<MusicRecord>(data.refid, {
+    collection: 'music', mid, type, version,
+  });
+  if (!record) {
+    return send.json({ success: false, error: 'Score not found' });
+  }
+
+  const update: any = {};
+
+  // Validate and apply clear
+  if (data.clear != null) {
+    const clear = parseInt(String(data.clear));
+    if (clear < 0 || clear > 6 || isNaN(clear)) {
+      return send.json({ success: false, error: 'Invalid clear type (0-6)' });
+    }
+    // PUC (clear=6 in Nabla) requires score = 10,000,000
+    const newScore = data.score != null ? parseInt(String(data.score)) : record.score;
+    if (clear === 6 && newScore < 10000000) {
+      return send.json({ success: false, error: 'PUC requires a score of 10,000,000' });
+    }
+    update.clear = clear;
+  }
+
+  // Validate and apply score
+  if (data.score != null) {
+    const score = parseInt(String(data.score));
+    if (isNaN(score) || score < 0 || score > 10000000) {
+      return send.json({ success: false, error: 'Invalid score (0-10,000,000)' });
+    }
+    // If clear is PUC (6) and score is being lowered below 10M, reject
+    const newClear = data.clear != null ? parseInt(String(data.clear)) : record.clear;
+    if (newClear === 6 && score < 10000000) {
+      return send.json({ success: false, error: 'PUC requires a score of 10,000,000' });
+    }
+    update.score = score;
+
+    // Recompute grade from score
+    if (score >= 9900000) update.grade = 10;
+    else if (score >= 9800000) update.grade = 9;
+    else if (score >= 9700000) update.grade = 8;
+    else if (score >= 9500000) update.grade = 7;
+    else if (score >= 9300000) update.grade = 6;
+    else if (score >= 9000000) update.grade = 5;
+    else if (score >= 8700000) update.grade = 4;
+    else if (score >= 7500000) update.grade = 3;
+    else if (score >= 6500000) update.grade = 2;
+    else update.grade = 1;
+  }
+
+  // Recompute volforce for v7
+  if (version === 7 && (data.score != null || data.clear != null)) {
+    const finalScore = update.score ?? record.score;
+    const finalClear = update.clear ?? record.clear;
+    const finalGrade = update.grade ?? record.grade;
+
+    const mdb = await loadMusicDb();
+    if (mdb) {
+      const diffName = ['novice', 'advanced', 'exhaust', 'infinite', 'maximum', 'ultimate'];
+      const song = mdb.mdb.music.find((s: any) => String(s.id) === String(mid));
+      if (song) {
+        const diffLevel = parseFloat(song.difficulty?.[diffName[type]]) || 0;
+        if (diffLevel > 0) {
+          update.volforce = computeForce(diffLevel, finalScore, finalClear, finalGrade);
+        }
+      }
+    }
+  }
+
+  if (Object.keys(update).length === 0) {
+    return send.json({ success: true });
+  }
+
+  await DB.Update<MusicRecord>(
+    data.refid,
+    { collection: 'music', mid, type, version },
+    { $set: update }
+  );
+
+  // Return updated record
+  const updated = await DB.FindOne<MusicRecord>(data.refid, {
+    collection: 'music', mid, type, version,
+  });
+  send.json({ success: true, record: updated });
 }
