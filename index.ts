@@ -25,6 +25,22 @@ import {
   saveValgene,
   saveE
 } from './handlers/profiles';
+import {
+  nauticaBrowse,
+  nauticaApprove,
+  nauticaRemove,
+  nauticaList,
+  nauticaConvertStatus,
+  nauticaDownloadSong,
+  nauticaDownloadAll,
+  nauticaNominate,
+  nauticaMyNominations,
+  nauticaNominationQueue,
+  nauticaSubmitFeedback,
+  nauticaGetFeedback,
+  nauticaSetTesting,
+  nauticaReject,
+} from './handlers/nautica';
 import { ARENA_STATION_ITEMS } from './data/exg';
 import { ARENA_STATION_ITEMS7 } from './data/nbl';
 import { dataUpdate } from './handlers/migrate'
@@ -43,6 +59,9 @@ export function register() {
   R.Config('unlock_all_songs', { type: 'boolean', default: false, name:'Unlock All Songs'});
   R.Config('unlock_all_navigators', { type: 'boolean', default: false, name:'Unlock All Navigators'} );
   R.Config('unlock_all_appeal_cards', { type: 'boolean', default: false, name:'Unlock All Appeal Cards'});
+  R.Config('sdvx_voxcharger_path', { type: 'string', needRestart: false, default: '', name: 'VoxCharger Path', desc: 'Path to VoxCharger.exe for converting custom charts'});
+  R.Config('sdvx_custom_mix_name', { type: 'string', needRestart: false, default: 'asphyxia_custom', name: 'Custom Mix Name', desc: 'Folder name under data_mods/ for curated custom charts'});
+  R.Config('sdvx_nomination_mode', { type: 'string', options: ['production', 'staging'], default: 'production', name: 'Nomination Mode', desc: 'On staging servers, charts moved to testing are auto-converted for playtesting'});
 
   R.WebUIEvent('copyResourcesFromGame', copyResourcesFromGame);
   R.WebUIEvent('getRivalScores', getRivalScores);
@@ -55,6 +74,20 @@ export function register() {
   R.WebUIEvent('updateScore', updateScore);
   R.WebUIEvent('addWeekly', addWeekly);
   R.WebUIEvent('getWeekRankList', getWeekRankList);
+  R.WebUIEvent('nauticaBrowse', nauticaBrowse);
+  R.WebUIEvent('nauticaApprove', nauticaApprove);
+  R.WebUIEvent('nauticaRemove', nauticaRemove);
+  R.WebUIEvent('nauticaList', nauticaList);
+  R.WebUIEvent('nauticaConvertStatus', nauticaConvertStatus);
+  R.WebUIEvent('nauticaDownloadSong', nauticaDownloadSong);
+  R.WebUIEvent('nauticaDownloadAll', nauticaDownloadAll);
+  R.WebUIEvent('nauticaNominate', nauticaNominate);
+  R.WebUIEvent('nauticaMyNominations', nauticaMyNominations);
+  R.WebUIEvent('nauticaNominationQueue', nauticaNominationQueue);
+  R.WebUIEvent('nauticaSubmitFeedback', nauticaSubmitFeedback);
+  R.WebUIEvent('nauticaGetFeedback', nauticaGetFeedback);
+  R.WebUIEvent('nauticaSetTesting', nauticaSetTesting);
+  R.WebUIEvent('nauticaReject', nauticaReject);
 
   const MultiRoute = (method: string, handler: EPR | boolean) => {
     // Helper for register multiple versions.

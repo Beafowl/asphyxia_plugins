@@ -36,6 +36,21 @@ These changes are specific to the [asphyxia-core fork](https://github.com/Beafow
 - Fixed MXV lamp mapping: exports as MAXXIVE CLEAR instead of EXCESSIVE CLEAR
 - Restricted Tachi tab to profile owner only
 
+### Nautica Custom Charts System
+- Integrated with [ksm.dev (Nautica)](https://ksm.dev) API for browsing and searching community KSM charts
+- Admin curation: browse Nautica, approve charts directly or through nomination pipeline
+- Chart nomination system: any user can nominate charts for admin review
+- Playtesting pipeline: admins can move nominations to "testing" status, playtesters vote and leave feedback
+- Staging server mode: auto-converts charts in testing status for playtesting on a separate server
+- Full conversion pipeline via VoxCharger `--full-import`: downloads KSH zip, converts to game-ready VOX/S3V/jackets
+- Custom charts page with download buttons (individual + all charts ZIP) and sync script
+- Pre-launch sync script: players download a .bat that auto-syncs custom charts before launching the game
+- Songs list filter: "Show custom charts only" checkbox
+- Effector (charter) display on all Nautica search results and curated chart cards
+- Nautica difficulty 4 (INF) maps to MXM for all custom charts
+- Custom song IDs start at 10000+ and are included in the game's song unlock list
+- Compatibility note on import/export pages linking to the [upstream plugin](https://github.com/22vv0/asphyxia_plugins)
+
 ### Custom Songs & MID Validation
 - Added `custom_music_db.json` support: add custom songs (MID 10000+) in the same format as `music_db.json`, merged at load time
 - Scores for unknown MIDs (not in `music_db.json` or `custom_music_db.json`) are now silently rejected
@@ -43,8 +58,19 @@ These changes are specific to the [asphyxia-core fork](https://github.com/Beafow
 - Volforce recalculation now reads from the plugin folder instead of root `music_db.json`
 - WebUI pages merge custom songs for display
 
+### Flower Import Fixes
+- Fixed import creating score=0 entries for "PLAYED" placeholder scores from Flower API
+- Fixed field mapping to use correct Flower API field names (`best_score`, `best_clear_type`)
+- Added `best_score_timestamp` passthrough for proper score timestamps
+- Added zero-score filtering on Tachi export as a safety net
+
 ### Score Migration
 - Added "Migrate Scores to Another Server" export feature: downloads a `savedata.zip` containing only the user's profile, cards, and SDVX data for importing on another Asphyxia server
+- Note: migration is only compatible with servers using the [22vv0/asphyxia_plugins](https://github.com/22vv0/asphyxia_plugins) SDVX plugin or forks derived from it
+
+### Code Quality
+- Separated all inline styles and scripts from pug templates into external CSS/JS files
+- Pug files are now layout-only; all logic lives in `webui/asset/js/` and `webui/asset/css/`
 
 ### Nabla (v7) Support
 - Added Nabla v7 score export support for Tachi

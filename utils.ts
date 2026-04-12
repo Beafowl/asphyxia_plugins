@@ -72,6 +72,29 @@ export function isValidMid(mid: number): boolean {
   return validMidSet.has(String(mid));
 }
 
+export function invalidateMusicDbCache() {
+  musicDbCache = null;
+  validMidSet = null;
+  musicDbLoadFailed = false;
+}
+
+const NAUTICA_ID_START = 10000;
+
+export async function GetNextNauticaId(): Promise<number> {
+  const existing = await DB.FindOne<Counter>({ collection: 'counter', key: 'nautica_music_id' });
+  let nextValue: number;
+  if (!existing || existing.value < NAUTICA_ID_START) {
+    nextValue = NAUTICA_ID_START;
+  } else {
+    nextValue = existing.value + 1;
+  }
+  await DB.Upsert<Counter>(
+    { collection: 'counter', key: 'nautica_music_id' },
+    { $set: { value: nextValue } }
+  );
+  return nextValue;
+}
+
 export function computeForce(diff, score, medal, grade) {
   // computing force with Nabla values
   const medalCoef = [0, 0.5, 1.0, 1.02, 1.04, 1.06, 1.1];

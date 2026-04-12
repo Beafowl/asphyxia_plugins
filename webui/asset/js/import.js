@@ -1,0 +1,812 @@
+(function() {
+  // Method selector
+  var methods = [
+    { btn: document.getElementById('method-tachi-btn'), section: document.getElementById('method-tachi') },
+    { btn: document.getElementById('method-flower-btn'), section: document.getElementById('method-flower') },
+    { btn: document.getElementById('method-csv-btn'), section: document.getElementById('method-csv') },
+    { btn: document.getElementById('method-server-btn'), section: document.getElementById('method-server') },
+  ];
+  methods.forEach(function(m) {
+    m.btn.addEventListener('click', function() {
+      methods.forEach(function(o) {
+        o.btn.classList.remove('is-link');
+        o.section.style.display = 'none';
+      });
+      m.btn.classList.add('is-link');
+      m.section.style.display = '';
+    });
+  });
+
+  if (localStorage.getItem('tachi-warning-dismissed') === '1') {
+    var w = document.getElementById('tachi-controller-warning');
+    if (w) w.style.display = 'none';
+  }
+
+  if (typeof isOwner !== 'undefined' && !isOwner) {
+    document.getElementById('tachi-status').style.display = 'none';
+    document.getElementById('tachi-not-authorized').style.display = 'none';
+    document.getElementById('tachi-authorized').style.display = 'none';
+    document.getElementById('tachi-pb-lists').style.display = 'none';
+    document.querySelector('#method-tachi .card-content .content').innerHTML =
+      '<div class="notification is-warning is-light"><span class="icon"><i class="mdi mdi-lock"></i></span> Importing is only available on your own profile.</div>';
+    document.getElementById('flower-status').style.display = 'none';
+    document.getElementById('flower-not-authorized').style.display = 'none';
+    document.getElementById('flower-authorized').style.display = 'none';
+    document.querySelector('#method-flower .card-content .content').innerHTML =
+      '<div class="notification is-warning is-light"><span class="icon"><i class="mdi mdi-lock"></i></span> Importing is only available on your own profile.</div>';
+    document.getElementById('migrate-step-1').style.display = 'none';
+    return;
+  }
+
+  // --- Tachi Import ---
+  var configHandle = Tachi.initTachiConfig(document.getElementById('tachi-not-authorized'));
+
+  function refreshStatus() {
+    Tachi.checkStatus(
+      document.getElementById('tachi-status'),
+      function onAuthorized() {
+        document.getElementById('tachi-authorized').style.display = '';
+        document.getElementById('tachi-not-authorized').style.display = 'none';
+        document.getElementById('tachi-pb-lists').style.display = '';
+        Tachi.loadAsphyxiaPBs('asphyxia-pb-table');
+        Tachi.loadTachiPBs('tachi-pb-table');
+      },
+      function onNotAuthorized() {
+        document.getElementById('tachi-not-authorized').style.display = '';
+        document.getElementById('tachi-authorized').style.display = 'none';
+      }
+    );
+  }
+
+  Tachi.initAuth(
+    document.getElementById('tachi-authorize-btn'),
+    document.getElementById('tachi-disconnect-btn'),
+    configHandle,
+    refreshStatus
+  );
+  refreshStatus();
+
+  function showResult(type, html) {
+    var resultDiv = document.getElementById('tachi-result');
+    var contentDiv = document.getElementById('tachi-result-content');
+    resultDiv.style.display = '';
+    contentDiv.innerHTML = '<div class="notification is-' + type + ' is-light">' + html + '</div>';
+  }
+
+  // Import from Tachi button
+  document.getElementById('tachi-import-btn').addEventListener('click', function() {
+    var btn = this;
+    btn.classList.add('is-loading');
+    btn.disabled = true;
+
+    Tachi.importFromTachi(refid)
+      .then(function(result) {
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+        if (!result.success) {
+          showResult('danger', '<strong>Import failed:</strong> ' + (result.description || 'Unknown error'));
+          return;
+        }
+        var html = '<p class="has-text-success"><strong>Import from Tachi complete!</strong></p>';
+        html += '<p>Scores imported: ' + (result.imported || 0) + '</p>';
+        if (result.skipped) html += '<p>Skipped (already in DB): ' + result.skipped + '</p>';
+        if (result.message) html += '<p>' + result.message + '</p>';
+        if (result.scores && result.scores.length > 0) {
+          html += '<details><summary>Tachi PBs fetched (' + result.scores.length + ')</summary>';
+          html += '<div style="max-height:300px;overflow:auto;">';
+          html += '<table class="table is-narrow is-fullwidth is-striped" style="font-size:0.8em;">';
+          html += '<thead><tr><th>ID</th><th>Song</th><th>Diff</th><th>Score</th><th>Lamp</th></tr></thead><tbody>';
+          for (var i = 0; i < result.scores.length; i++) {
+            var s = result.scores[i];
+            html += '<tr><td>' + s.mid + '</td><td>' + s.songName + '</td><td>' + s.difficulty + '</td><td>' + s.score + '</td><td>' + s.lamp + '</td></tr>';
+          }
+          html += '</tbody></table></div></details>';
+        }
+        if (result.imported > 0) html += '<p class="mt-2"><em>Reload the page to see updated scores.</em></p>';
+        showResult('success', html);
+      })
+      .catch(function(err) {
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+        showResult('danger', '<strong>Error:</strong> ' + err.message);
+      });
+  });
+
+  // Synchronize: import from Tachi + export new scores to Tachi
+  document.getElementById('tachi-sync-btn').addEventListener('click', function() {
+    var btn = this;
+    btn.classList.add('is-loading');
+    btn.disabled = true;
+    showResult('info', '<p><strong>Synchronizing...</strong></p>');
+
+    Tachi.importFromTachi(refid)
+      .then(function(importResult) {
+        return Tachi.exportToTachi(refid, false).then(function(exportResult) {
+          btn.classList.remove('is-loading');
+          btn.disabled = false;
+          var html = '<p class="has-text-success"><strong>Synchronization complete!</strong></p><hr>';
+          html += '<p><strong>Import from Tachi:</strong></p>';
+          if (!importResult.success) {
+            html += '<p class="has-text-danger">Import failed: ' + (importResult.description || 'Unknown error') + '</p>';
+          } else {
+            html += '<p>Scores imported: ' + (importResult.imported || 0) + '</p>';
+            if (importResult.skipped) html += '<p>Skipped (already in DB): ' + importResult.skipped + '</p>';
+            if (importResult.message) html += '<p>' + importResult.message + '</p>';
+          }
+          html += '<hr><p><strong>Export to Tachi:</strong></p>';
+          if (exportResult._skipped) {
+            html += '<p>' + exportResult._message + '</p>';
+          } else if (exportResult.data && exportResult.data.success) {
+            var ebody = exportResult.data.body || {};
+            html += '<p>Scores sent: ' + exportResult.scoresSent + '</p>';
+            if (exportResult.skippedCount > 0) html += '<p>Skipped (already exported): ' + exportResult.skippedCount + '</p>';
+            if (ebody.scoreIDs) html += '<p>New scores on Tachi: ' + ebody.scoreIDs.length + '</p>';
+            if (ebody.errors && ebody.errors.length > 0) html += '<p>Errors: ' + ebody.errors.length + '</p>';
+          } else if (exportResult.data) {
+            html += '<p class="has-text-danger">Export failed: ' + (exportResult.data.description || 'Unknown error') + '</p>';
+          }
+          if (importResult.imported > 0) html += '<p class="mt-2"><em>Reload the page to see updated scores.</em></p>';
+          showResult('success', html);
+        });
+      })
+      .catch(function(err) {
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+        showResult('danger', '<strong>Sync error:</strong> ' + err.message);
+      });
+  });
+
+  // --- Project Flower Import ---
+  var flowerClientId = '';
+  fetch('/flower/config')
+    .then(function(r) { return r.json(); })
+    .then(function(cfg) { flowerClientId = cfg.clientId || ''; });
+
+  function refreshFlowerStatus() {
+    fetch('/flower/status')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('flower-status').style.display = 'none';
+        if (data.authorized) {
+          document.getElementById('flower-authorized').style.display = '';
+          document.getElementById('flower-not-authorized').style.display = 'none';
+        } else {
+          document.getElementById('flower-not-authorized').style.display = '';
+          document.getElementById('flower-authorized').style.display = 'none';
+        }
+      })
+      .catch(function() {
+        document.getElementById('flower-status').innerHTML =
+          '<div class="notification is-danger is-light">Failed to check Project Flower status.</div>';
+      });
+  }
+  refreshFlowerStatus();
+
+  document.getElementById('flower-authorize-btn').addEventListener('click', function() {
+    var protocol = window.location.protocol;
+    var host = window.location.host;
+    var redirectUri = protocol + '//' + host + '/flower/callback';
+    var authUrl = 'https://kailua.projectflower.eu/oauth/authorize'
+      + '?client_id=' + encodeURIComponent(flowerClientId)
+      + '&response_type=code'
+      + '&redirect_uri=' + encodeURIComponent(redirectUri)
+      + '&scope=settings_read';
+    window.open(authUrl, 'flower_auth', 'width=600,height=700');
+  });
+
+  window.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'flower-auth' && event.data.code) {
+      fetch('/flower/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: event.data.code })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            refreshFlowerStatus();
+          } else {
+            document.getElementById('flower-status').style.display = '';
+            document.getElementById('flower-status').innerHTML =
+              '<div class="notification is-danger is-light">Authorization failed: ' + (data.description || 'Unknown error') + '</div>';
+          }
+        });
+    }
+  });
+
+  document.getElementById('flower-disconnect-btn').addEventListener('click', function() {
+    if (!confirm('Disconnect from Project Flower?')) return;
+    fetch('/flower/disconnect', { method: 'POST' })
+      .then(function() { refreshFlowerStatus(); });
+  });
+
+  function showFlowerResult(type, html) {
+    var resultDiv = document.getElementById('flower-result');
+    var contentDiv = document.getElementById('flower-result-content');
+    resultDiv.style.display = '';
+    contentDiv.innerHTML = '<div class="notification is-' + type + ' is-light">' + html + '</div>';
+  }
+
+  document.getElementById('flower-import-btn').addEventListener('click', function() {
+    var btn = this;
+    btn.classList.add('is-loading');
+    btn.disabled = true;
+    showFlowerResult('info', '<p><strong>Fetching scores from Project Flower...</strong></p>');
+
+    fetch('/flower/scores')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.success) {
+          btn.classList.remove('is-loading');
+          btn.disabled = false;
+          showFlowerResult('danger', '<strong>Failed to fetch scores:</strong> ' + (data.description || 'Unknown error'));
+          return;
+        }
+
+        if (!data.scores || data.scores.length === 0) {
+          btn.classList.remove('is-loading');
+          btn.disabled = false;
+          var html = 'No scores found on Project Flower.';
+          if (data._debug || data._raw) {
+            html += '<details class="mt-3"><summary>Debug Info</summary>';
+            html += '<pre style="max-height:400px;overflow:auto;font-size:0.75em;background:#1a1a1e;color:#ddd;padding:0.5em;border-radius:4px;white-space:pre-wrap;">';
+            html += JSON.stringify(data, null, 2);
+            html += '</pre></details>';
+          }
+          showFlowerResult('warning', html);
+          return;
+        }
+
+        showFlowerResult('info', '<p><strong>Fetched ' + data.total + ' scores. Saving...</strong></p>');
+
+        var normalized = [];
+        var unmapped = 0;
+        for (var i = 0; i < data.scores.length; i++) {
+          var s = data.scores[i];
+          var mapped = normalizeFlowerScore(s);
+          if (mapped) {
+            normalized.push(mapped);
+          } else {
+            unmapped++;
+          }
+        }
+
+        if (normalized.length === 0) {
+          btn.classList.remove('is-loading');
+          btn.disabled = false;
+          var html = '<strong>Could not normalize any scores.</strong>';
+          html += '<p>Unmapped: ' + unmapped + '</p>';
+          html += '<details class="mt-3"><summary>Raw score sample (' + Math.min(data.scores.length, 5) + ' entries)</summary>';
+          html += '<pre style="max-height:400px;overflow:auto;font-size:0.75em;background:#1a1a1e;color:#ddd;padding:0.5em;border-radius:4px;white-space:pre-wrap;">';
+          html += JSON.stringify(data.scores.slice(0, 5), null, 2);
+          html += '</pre></details>';
+          showFlowerResult('danger', html);
+          return;
+        }
+
+        fetch('/flower/save-scores', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refid: refid, scores: normalized })
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(saveResult) {
+            btn.classList.remove('is-loading');
+            btn.disabled = false;
+            if (saveResult.success) {
+              var html = '<p class="has-text-success"><strong>Import from Project Flower complete!</strong></p>';
+              html += '<p>Scores fetched: ' + data.total + '</p>';
+              html += '<p>Scores imported/updated: ' + (saveResult.saved || 0) + '</p>';
+              if (saveResult.skipped) html += '<p>Skipped (existing score is equal or better): ' + saveResult.skipped + '</p>';
+              if (unmapped > 0) html += '<p>Unmapped (unknown format): ' + unmapped + '</p>';
+              if (saveResult.saved > 0) html += '<p class="mt-2"><em>Reload the page to see updated scores.</em></p>';
+              showFlowerResult('success', html);
+            } else {
+              showFlowerResult('danger', '<strong>Save failed:</strong> ' + (saveResult.description || 'Unknown error'));
+            }
+          })
+          .catch(function(err) {
+            btn.classList.remove('is-loading');
+            btn.disabled = false;
+            showFlowerResult('danger', '<strong>Save error:</strong> ' + err.message);
+          });
+      })
+      .catch(function(err) {
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+        showFlowerResult('danger', '<strong>Error:</strong> ' + err.message);
+      });
+  });
+
+  // Normalize a Project Flower score entry to Asphyxia format
+  function normalizeFlowerScore(s) {
+    var mid = s.music_id;
+    var type = s.music_difficulty;
+    var score = s.best_score || 0;
+    var clear = s.best_clear_type || 1;
+    var version = s.played_version || 6;
+
+    if (mid === undefined || mid === null || type === undefined || type === null) return null;
+    if (score <= 0) return null;
+
+    return {
+      mid: mid,
+      type: type,
+      score: score,
+      clear: clear,
+      grade: 0,
+      exscore: 0,
+      version: version,
+      timeAchieved: s.best_score_timestamp || null
+    };
+  }
+
+  // --- E-Amusement CSV Import ---
+  var csvScores = null;
+
+  function buildSongNameMap() {
+    if (!Tachi.isMusicDBLoaded()) return null;
+    return null;
+  }
+
+  function parseCSVLine(line) {
+    var fields = [];
+    var current = '';
+    var inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+      } else if (ch === ',' && !inQuotes) {
+        fields.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    fields.push(current.trim());
+    return fields;
+  }
+
+  function showCsvError(msg) {
+    var el = document.getElementById('csv-parse-error');
+    el.style.display = '';
+    el.innerHTML = '<div class="notification is-danger is-light">' + msg + '</div>';
+    document.getElementById('csv-preview').style.display = 'none';
+  }
+
+  function showCsvResult(type, html) {
+    var el = document.getElementById('csv-result');
+    el.style.display = '';
+    el.innerHTML = '<div class="notification is-' + type + ' is-light">' + html + '</div>';
+  }
+
+  var csvMusicDb = null;
+  var csvMusicDbLoaded = false;
+  $.getJSON("static/asset/json/music_db.json")
+    .done(function(json) { csvMusicDb = json; csvMusicDbLoaded = true; })
+    .fail(function() {});
+
+  function toAsciiSkeleton(str) {
+    var decomposed = str.normalize ? str.normalize('NFD') : str;
+    var out = '';
+    for (var i = 0; i < decomposed.length; i++) {
+      var code = decomposed.charCodeAt(i);
+      if (code >= 0x20 && code <= 0x7E) {
+        out += decomposed[i].toLowerCase();
+      }
+    }
+    return out;
+  }
+
+  function stringSimilarity(a, b) {
+    if (a === b) return 1;
+    if (!a.length || !b.length) return 0;
+    var longer = a.length >= b.length ? a : b;
+    var shorter = a.length >= b.length ? b : a;
+    if (longer.length === 0) return 1;
+    var matches = 0;
+    var used = {};
+    for (var i = 0; i < shorter.length; i++) {
+      for (var j = 0; j < longer.length; j++) {
+        if (!used[j] && shorter[i] === longer[j]) {
+          matches++;
+          used[j] = true;
+          break;
+        }
+      }
+    }
+    return matches / longer.length;
+  }
+
+  function findMusicId(songName, diffType) {
+    if (!csvMusicDb) return null;
+    var songs = csvMusicDb["mdb"]["music"];
+
+    for (var i = 0; i < songs.length; i++) {
+      if (songs[i]["info"]["title_name"] === songName) {
+        return songs[i]["id"];
+      }
+    }
+
+    var normalized = songName.replace(/\s+/g, ' ').trim();
+    for (var i = 0; i < songs.length; i++) {
+      var dbName = songs[i]["info"]["title_name"].replace(/\s+/g, ' ').trim();
+      if (dbName === normalized) {
+        return songs[i]["id"];
+      }
+    }
+
+    var csvSkeleton = toAsciiSkeleton(songName);
+    if (csvSkeleton.length >= 3) {
+      var bestMatch = null;
+      var bestSim = 0;
+      for (var i = 0; i < songs.length; i++) {
+        var dbSkeleton = toAsciiSkeleton(songs[i]["info"]["title_name"]);
+        if (Math.abs(dbSkeleton.length - csvSkeleton.length) > 3) continue;
+        if (dbSkeleton === csvSkeleton) {
+          return songs[i]["id"];
+        }
+        var sim = stringSimilarity(csvSkeleton, dbSkeleton);
+        if (sim > bestSim) {
+          bestSim = sim;
+          bestMatch = songs[i]["id"];
+        }
+      }
+      if (bestSim >= 0.9 && bestMatch !== null) {
+        return bestMatch;
+      }
+    }
+
+    return null;
+  }
+
+  var CSV_DIFF_MAP = {
+    'NOVICE': 0, 'ADVANCED': 1, 'EXHAUST': 2,
+    'INFINITE': 3, 'GRAVITY': 3, 'HEAVENLY': 3, 'VIVID': 3, 'EXCEED': 3,
+    'MAXIMUM': 4, 'ULTIMATE': 5
+  };
+
+  var CSV_CLEAR_MAP = {
+    'PLAYED': 1,
+    'COMPLETE': 2,
+    'EXCESSIVE COMPLETE': 3,
+    'MAXXIVE COMPLETE': 4,
+    'ULTIMATE CHAIN': 5,
+    'PERFECT': 6
+  };
+
+  var CSV_GRADE_MAP = {
+    'D': 1, 'C': 2, 'B': 3, 'A': 4, 'A+': 5,
+    'AA': 6, 'AA+': 7, 'AAA': 8, 'AAA+': 9, 'S': 10
+  };
+
+  document.getElementById('csv-file-input').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+
+    document.getElementById('csv-file-name').textContent = file.name;
+    document.getElementById('csv-parse-error').style.display = 'none';
+    document.getElementById('csv-preview').style.display = 'none';
+    document.getElementById('csv-result').style.display = 'none';
+
+    if (!csvMusicDbLoaded) {
+      showCsvError('<strong>Song database not loaded yet.</strong> Please wait and try again.');
+      return;
+    }
+
+    file.text().then(function(text) {
+      var lines = text.split('\n');
+      if (lines.length < 2) {
+        showCsvError('<strong>CSV file is empty or has no data rows.</strong>');
+        return;
+      }
+
+      var parsed = [];
+      var unmapped = [];
+      for (var i = 1; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        var fields = parseCSVLine(line);
+        if (fields.length < 7) continue;
+
+        var songName = fields[0];
+        var diff = fields[1];
+        var level = parseFloat(fields[2]) || 0;
+        var clearRank = fields[3];
+        var gradeStr = fields[4];
+        var score = parseInt(fields[5]) || 0;
+        var exscore = parseInt(fields[6]) || 0;
+
+        var type = CSV_DIFF_MAP[diff];
+        if (type === undefined) continue;
+
+        var mid = findMusicId(songName, type);
+        if (mid === null) {
+          unmapped.push(songName + ' [' + diff + ']');
+          continue;
+        }
+
+        var clear = CSV_CLEAR_MAP[clearRank] || 1;
+        var grade = CSV_GRADE_MAP[gradeStr] || 0;
+
+        parsed.push({
+          mid: mid,
+          type: type,
+          score: score,
+          clear: clear,
+          grade: grade,
+          exscore: exscore,
+          version: 7,
+          _name: songName,
+          _diff: diff,
+          _level: level
+        });
+      }
+
+      if (parsed.length === 0 && unmapped.length === 0) {
+        showCsvError('<strong>No valid score entries found in CSV.</strong>');
+        return;
+      }
+
+      csvScores = parsed;
+
+      var html = '<table class="table is-narrow"><tbody>';
+      html += '<tr><td><strong>Total scores parsed</strong></td><td>' + parsed.length + '</td></tr>';
+      if (unmapped.length > 0) {
+        html += '<tr><td><strong>Unmatched songs</strong></td><td>' + unmapped.length + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      if (unmapped.length > 0) {
+        html += '<details><summary>Unmatched songs (' + unmapped.length + ')</summary><ul>';
+        for (var j = 0; j < unmapped.length; j++) {
+          html += '<li>' + unmapped[j] + '</li>';
+        }
+        html += '</ul></details>';
+      }
+      html += '<p class="is-size-7 has-text-grey">Existing scores that are already better will not be overwritten. Clear types use Nabla (v7) ordering.</p>';
+
+      document.getElementById('csv-preview-content').innerHTML = html;
+      document.getElementById('csv-preview').style.display = '';
+    }).catch(function(err) {
+      showCsvError('<strong>Failed to read file:</strong> ' + err.message);
+    });
+  });
+
+  document.getElementById('csv-import-btn').addEventListener('click', function() {
+    if (!csvScores || csvScores.length === 0) return;
+
+    var btn = this;
+    btn.classList.add('is-loading');
+    btn.disabled = true;
+
+    var toSend = csvScores.map(function(s) {
+      return {
+        mid: s.mid, type: s.type, score: s.score, clear: s.clear,
+        grade: s.grade, exscore: s.exscore, version: s.version
+      };
+    });
+
+    fetch('/flower/save-scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refid: refid, scores: toSend })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.classList.remove('is-loading');
+      btn.disabled = false;
+      if (data.success) {
+        var html = '<strong>Import complete!</strong>';
+        html += '<br>Scores imported/updated: ' + (data.saved || 0);
+        if (data.skipped) html += '<br>Skipped (existing score is equal or better): ' + data.skipped;
+        html += '<br><br><em>Reload the page to see updated scores.</em>';
+        showCsvResult('success', html);
+      } else {
+        showCsvResult('danger', '<strong>Import failed:</strong> ' + (data.description || 'Unknown error'));
+      }
+    })
+    .catch(function(err) {
+      btn.classList.remove('is-loading');
+      btn.disabled = false;
+      showCsvResult('danger', '<strong>Error:</strong> ' + err.message);
+    });
+  });
+
+  // --- Migrate from Another Server ---
+  var profileMap = {};
+  var scoresByRefid = {};
+
+  function parseNeDB(text) {
+    var docs = [];
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      try { docs.push(JSON.parse(line)); } catch (e) {}
+    }
+    return docs;
+  }
+
+  function showMigrateError(msg) {
+    var el = document.getElementById('migrate-parse-error');
+    el.style.display = '';
+    el.innerHTML = '<div class="notification is-danger is-light">' + msg + '</div>';
+    document.getElementById('migrate-step-2').style.display = 'none';
+  }
+
+  function showMigrateResult(type, html) {
+    var el = document.getElementById('migrate-result');
+    el.style.display = '';
+    el.innerHTML = '<div class="notification is-' + type + ' is-light">' + html + '</div>';
+  }
+
+  document.getElementById('migrate-folder-input').addEventListener('change', function(e) {
+    var files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    document.getElementById('migrate-parse-error').style.display = 'none';
+    document.getElementById('migrate-step-2').style.display = 'none';
+    document.getElementById('migrate-result').style.display = 'none';
+
+    var coreFile = null;
+    var sdvxFile = null;
+    for (var i = 0; i < files.length; i++) {
+      var name = files[i].name;
+      if (name === 'core.db') coreFile = files[i];
+      else if (name === 'sdvx@asphyxia.db') sdvxFile = files[i];
+    }
+
+    var folderName = files[0].webkitRelativePath.split('/')[0] || 'selected folder';
+    document.getElementById('migrate-folder-name').textContent = folderName;
+
+    if (!coreFile || !sdvxFile) {
+      var missing = [];
+      if (!coreFile) missing.push('core.db');
+      if (!sdvxFile) missing.push('sdvx@asphyxia.db');
+      showMigrateError('<strong>Missing files:</strong> ' + missing.join(', ') + '. Make sure you selected the correct savedata folder.');
+      return;
+    }
+
+    Promise.all([coreFile.text(), sdvxFile.text()]).then(function(results) {
+      var coreDocs = parseNeDB(results[0]);
+      var sdvxDocs = parseNeDB(results[1]);
+
+      profileMap = {};
+      scoresByRefid = {};
+
+      var latestById = {};
+      for (var i = 0; i < coreDocs.length; i++) {
+        var doc = coreDocs[i];
+        if (doc._id) latestById[doc._id] = doc;
+      }
+      var resolvedCore = [];
+      for (var id in latestById) resolvedCore.push(latestById[id]);
+
+      for (var i = 0; i < resolvedCore.length; i++) {
+        var doc = resolvedCore[i];
+        if (doc.__s === 'profile' && doc.__refid && doc.name) {
+          profileMap[doc.__refid] = doc.name;
+        }
+      }
+
+      var sdvxLatest = {};
+      for (var i = 0; i < sdvxDocs.length; i++) {
+        var doc = sdvxDocs[i];
+        if (doc._id) sdvxLatest[doc._id] = doc;
+      }
+
+      for (var id in sdvxLatest) {
+        var doc = sdvxLatest[id];
+        if (doc.__s === 'plugins_profile' && doc.collection === 'music' && doc.__refid) {
+          if (!scoresByRefid[doc.__refid]) scoresByRefid[doc.__refid] = [];
+          scoresByRefid[doc.__refid].push(doc);
+        }
+      }
+
+      var profileCount = Object.keys(profileMap).length;
+      var totalScores = 0;
+      for (var r in scoresByRefid) totalScores += scoresByRefid[r].length;
+
+      if (profileCount === 0) {
+        showMigrateError('<strong>No profiles found</strong> in the core.db file.');
+        return;
+      }
+
+      document.getElementById('migrate-files-found').innerHTML =
+        '<strong>Found ' + profileCount + ' profile(s)</strong> and <strong>' + totalScores + ' score(s)</strong> in the selected folder.';
+
+      var select = document.getElementById('migrate-profile-select');
+      select.innerHTML = '<option value="" disabled selected>Select a profile...</option>';
+      for (var rid in profileMap) {
+        var count = scoresByRefid[rid] ? scoresByRefid[rid].length : 0;
+        var opt = document.createElement('option');
+        opt.value = rid;
+        opt.textContent = profileMap[rid] + ' (' + count + ' scores)';
+        select.appendChild(opt);
+      }
+
+      document.getElementById('migrate-step-2').style.display = '';
+      document.getElementById('migrate-preview').style.display = 'none';
+    }).catch(function(err) {
+      showMigrateError('<strong>Failed to read files:</strong> ' + err.message);
+    });
+  });
+
+  document.getElementById('migrate-profile-select').addEventListener('change', function() {
+    var selectedRefid = this.value;
+    var scores = scoresByRefid[selectedRefid] || [];
+    var preview = document.getElementById('migrate-preview');
+    var content = document.getElementById('migrate-preview-content');
+
+    if (scores.length === 0) {
+      content.innerHTML = '<p class="has-text-grey">No scores found for this profile.</p>';
+      preview.style.display = '';
+      return;
+    }
+
+    var v6Count = 0, v7Count = 0, otherCount = 0;
+    for (var i = 0; i < scores.length; i++) {
+      if (scores[i].version === 6) v6Count++;
+      else if (scores[i].version === 7) v7Count++;
+      else otherCount++;
+    }
+
+    var html = '<table class="table is-narrow"><tbody>';
+    html += '<tr><td><strong>Total scores</strong></td><td>' + scores.length + '</td></tr>';
+    if (v6Count > 0) html += '<tr><td>EXCEED GEAR (v6)</td><td>' + v6Count + '</td></tr>';
+    if (v7Count > 0) html += '<tr><td>Nabla (v7)</td><td>' + v7Count + '</td></tr>';
+    if (otherCount > 0) html += '<tr><td>Other versions</td><td>' + otherCount + '</td></tr>';
+    html += '</tbody></table>';
+    html += '<p class="is-size-7 has-text-grey">Existing scores that are already better will not be overwritten.</p>';
+
+    content.innerHTML = html;
+    preview.style.display = '';
+    document.getElementById('migrate-result').style.display = 'none';
+  });
+
+  document.getElementById('migrate-import-btn').addEventListener('click', function() {
+    var selectedRefid = document.getElementById('migrate-profile-select').value;
+    if (!selectedRefid) return;
+    var scores = scoresByRefid[selectedRefid] || [];
+    if (scores.length === 0) return;
+
+    var btn = this;
+    btn.classList.add('is-loading');
+    btn.disabled = true;
+
+    var mappedScores = scores.map(function(s) {
+      return {
+        mid: s.mid, type: s.type, score: s.score || 0, clear: s.clear || 0,
+        grade: s.grade || 0, exscore: s.exscore || 0, version: s.version || 6,
+        buttonRate: s.buttonRate || 0, longRate: s.longRate || 0,
+        volRate: s.volRate || 0, volforce: s.volforce || 0,
+      };
+    });
+
+    fetch('/migrate/import-scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refid: refid, scores: mappedScores })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.classList.remove('is-loading');
+      btn.disabled = false;
+      if (data.success) {
+        var html = '<strong>Import complete!</strong>';
+        html += '<br>Scores imported: ' + (data.saved || 0);
+        if (data.skipped) html += '<br>Skipped (existing score is equal or better): ' + data.skipped;
+        html += '<br><br><em>Reload the page to see updated scores.</em>';
+        showMigrateResult('success', html);
+      } else {
+        showMigrateResult('danger', '<strong>Import failed:</strong> ' + (data.description || 'Unknown error'));
+      }
+    })
+    .catch(function(err) {
+      btn.classList.remove('is-loading');
+      btn.disabled = false;
+      showMigrateResult('danger', '<strong>Error:</strong> ' + err.message);
+    });
+  });
+})();

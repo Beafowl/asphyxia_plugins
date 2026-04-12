@@ -1,0 +1,75 @@
+-
+link(rel="stylesheet" href="static/asset/css/customcharts.css")
+div
+  .card
+    .card-header
+      p.card-header-title
+        span.icon
+          i.mdi.mdi-music-box-multiple
+        | Custom Charts
+    .card-content
+      .notification.is-info.is-light
+        p Curated community charts available on this server. These charts are included in player rating calculations.
+        p
+          strong Automatic sync:
+          |  Download the sync script, place it next to your game executable, and run it instead of launching the game directly. Charts will sync automatically before each session.
+        p
+          strong Manual install:
+          |  Download the ZIP and extract it into your game's root folder.
+
+      .field.is-grouped.is-grouped-multiline.mb-4
+        .control
+          a.button.is-success(href="/api/nautica/sync-script")
+            span.icon
+              i.mdi.mdi-sync
+            span Download Sync Script
+        .control
+          a.button.is-link(href="/api/nautica/download-all")
+            span.icon
+              i.mdi.mdi-download
+            span Download All Charts (ZIP)
+        .control
+          a.button.is-light(href="/api/nautica/voxcharger")
+            span.icon
+              i.mdi.mdi-cog
+            span Download VoxCharger
+
+      #custom-charts-list
+        p.has-text-grey Loading custom charts...
+
+  .card.mt-5
+    .card-header
+      p.card-header-title
+        span.icon
+          i.mdi.mdi-star-plus
+        | Nominate a Chart
+    .card-content
+      p.mb-3 Search for a chart on Nautica and nominate it for review. Admins will review nominations and approved charts will be added to the server.
+      .field
+        .control
+          input.input#nominate-search(type="text" placeholder="Search charts on Nautica...")
+      #nominate-results
+      .pagination-controls#nominate-pagination
+
+  .card.mt-5
+    .card-header
+      p.card-header-title
+        span.icon
+          i.mdi.mdi-clipboard-list
+        | My Nominations
+    .card-content
+      #my-nominations
+        p.has-text-grey Loading...
+
+  .card.mt-5#testing-feedback-section(style="display:none")
+    .card-header
+      p.card-header-title
+        span.icon
+          i.mdi.mdi-test-tube
+        | Charts in Testing
+    .card-content
+      p.mb-3 These charts are being playtested. Play them and leave your feedback!
+      #testing-charts-list
+
+script(src="static/asset/js/customcharts.js")
+script(src="static/asset/js/nominations.js")

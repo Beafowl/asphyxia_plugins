@@ -1,0 +1,51 @@
+/* Shared chip styles */
+.chip { font-size: 0.75em; padding: 2px 6px; border-radius: 4px; color: #fff; }
+.chip-nov { background: #5b7bb5; }
+.chip-adv { background: #c4a135; }
+.chip-exh { background: #b53535; }
+.chip-inf { background: #c455c4; }
+.chip-mxm { background: #888; }
+
+/* Status badges */
+.curated-status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; }
+.status-nominated { background: #553300; color: #ffaa33; }
+.status-testing { background: #003355; color: #33aaff; }
+.status-approved { background: #335500; color: #88cc33; }
+.status-pending { background: #665500; color: #ffcc00; }
+.status-converting { background: #004466; color: #33ccff; }
+.status-ready { background: #005500; color: #55ff55; }
+.status-error { background: #660000; color: #ff5555; }
+.status-rejected { background: #440022; color: #ff4488; }
+
+/* Card grid (shared layout) */
+.charts-grid,
+.nautica-grid { display: grid; gap: 1rem; margin-top: 1rem; }
+.nautica-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.charts-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+
+/* Song cards */
+.nautica-card,
+.chart-card { background: #2a2a2e; border-radius: 8px; overflow: hidden; border: 1px solid #444; }
+
+.nautica-card .jacket,
+.chart-card .jacket { width: 100%; aspect-ratio: 1; object-fit: cover; }
+
+.nautica-card .info,
+.chart-card .info { padding: 0.75rem; }
+
+.nautica-card .title,
+.chart-card .title { font-weight: bold; font-size: 0.95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.nautica-card .artist,
+.chart-card .artist { font-size: 0.85em; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.nautica-card .charts,
+.chart-card .charts { display: flex; gap: 0.3rem; margin-top: 0.5rem; flex-wrap: wrap; }
+
+.nautica-card .actions,
+.chart-card .actions { padding: 0 0.75rem 0.75rem; }
+
+.chart-card .id-badge { font-size: 0.75em; color: #666; margin-top: 0.3rem; }
+
+/* Pagination */
+.pagination-controls { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; }

@@ -258,6 +258,22 @@ export const common: EPR = async (info, data, send) => {
       }
     }
 
+    // Include custom/curated songs (ID >= 10000) in music_limited
+    if (mdb && mdb.mdb && mdb.mdb.music) {
+      const customSongs = mdb.mdb.music.filter((s: any) => parseInt(s.id) >= 10000);
+      for (const songData of customSongs) {
+        for (let j = 0; j < 6; j++) {
+          if (songData.difficulty[diffName[j]] != '0') {
+            songs.push({
+              music_id: K.ITEM('s32', parseInt(songData.id)),
+              music_type: K.ITEM('u8', j),
+              limited: K.ITEM('u8', 3),
+            });
+          }
+        }
+      }
+    }
+
     if (information.length > 0) {
       let time = new Date();
       let currentTime = parseInt((time.getTime() / 100000) as unknown as string) * 100;

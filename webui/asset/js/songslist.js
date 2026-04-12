@@ -139,5 +139,19 @@ $(document).ready(function () {
     }
 
     populateSongsList(music_data);
+
+    // Custom charts filter
+    var table = $('#songslist').DataTable();
+    $('#custom-only-checkbox').on('change', function () {
+      if (this.checked) {
+        $.fn.dataTable.ext.search.push(function (settings, data) {
+          var id = parseInt(data[0]) || 0;
+          return id >= 10000;
+        });
+      } else {
+        $.fn.dataTable.ext.search.pop();
+      }
+      table.draw();
+    });
   });
 });
