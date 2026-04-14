@@ -8,26 +8,14 @@ div
           i.mdi.mdi-music-box-multiple
         | Custom Charts
     .card-content
-      .notification.is-info.is-light
-        p Curated community charts available on this server. These charts are included in player rating calculations.
-        p
-          strong Automatic sync:
-          |  Download the sync script, place it next to your game executable, and run it instead of launching the game directly. Charts will sync automatically before each session.
-        p
-          strong Manual install:
-          |  Download the ZIP and extract it into your game's root folder.
+      p Curated community charts available on this server. These charts are included in player rating calculations.
+      p
+        a(href="/plugin/sdvx@asphyxia/custom%20charts%20setup")
+          span.icon
+            i.mdi.mdi-book-open-variant
+          span How to play custom charts?
 
-      .field.is-grouped.is-grouped-multiline.mb-4
-        .control
-          a.button.is-success(href="/api/nautica/sync-script")
-            span.icon
-              i.mdi.mdi-sync
-            span Download Sync Script (.ps1)
-        .control
-          a.button.is-success.is-light(href="/api/nautica/sync-script-bat")
-            span.icon
-              i.mdi.mdi-console
-            span Download Launcher (.bat)
+      .field.is-grouped.is-grouped-multiline.mb-4.mt-4
         .control
           a.button.is-link(href="/api/nautica/download-all")
             span.icon

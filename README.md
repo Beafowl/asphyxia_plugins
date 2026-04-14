@@ -42,17 +42,21 @@ These changes are specific to the [asphyxia-core fork](https://github.com/Beafow
 - Chart nomination system: any user can nominate charts for admin review
 - Playtesting pipeline: admins can move nominations to "testing" status, playtesters vote and leave feedback
 - Staging server mode: auto-converts charts in testing status for playtesting on a separate server
-- Full conversion pipeline via VoxCharger `--full-import`: downloads KSH zip, converts to game-ready VOX/S3V/jackets
-- Custom charts page with download buttons (individual + all charts ZIP) and sync script
-- Pre-launch sync script: players download a .bat that auto-syncs custom charts before launching the game
+- Full conversion pipeline via VoxCharger `--full-import` and `--bulk-import`: downloads KSH zip, converts to game-ready VOX/2DX/jackets
+- Audio uses 2DX format (MS-ADPCM) — S3V (WMA Pro) encoding via ffmpeg produces incompatible wmav2 files
+- Custom charts page with download buttons and sync script
+- Pre-launch sync script (PowerShell): auto-syncs custom charts before launching the game
+- Sync bundle download: single ZIP with both `.ps1` and `.bat` files, server URL pre-filled
+- "How to Play Custom Charts" setup guide page with step-by-step instructions
 - Songs list filter: "Show custom charts only" checkbox
 - Effector (charter) display on all Nautica search results and curated chart cards
 - Nautica difficulty 4 (INF) maps to MXM for all custom charts
-- Custom song IDs start at 10000+ and are included in the game's song unlock list
+- Custom song IDs start at 2800 (game crashes at IDs >= 3072 due to internal array limit)
+- Maximum of 271 custom chart slots (2800-3071)
 - Compatibility note on import/export pages linking to the [upstream plugin](https://github.com/22vv0/asphyxia_plugins)
 
 ### Custom Songs & MID Validation
-- Added `custom_music_db.json` support: add custom songs (MID 10000+) in the same format as `music_db.json`, merged at load time
+- Added `custom_music_db.json` support: add custom songs (MID 2800+) in the same format as `music_db.json`, merged at load time
 - Scores for unknown MIDs (not in `music_db.json` or `custom_music_db.json`) are now silently rejected
 - Centralized music DB loading into a shared `loadMusicDb()` utility used by all handlers
 - Volforce recalculation now reads from the plugin folder instead of root `music_db.json`
