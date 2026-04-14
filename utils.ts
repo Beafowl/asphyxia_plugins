@@ -78,7 +78,9 @@ export function invalidateMusicDbCache() {
   musicDbLoadFailed = false;
 }
 
-const NAUTICA_ID_START = 10000;
+// Game crashes with music IDs >= 3072 (internal array limit in soundvoltex.dll)
+// Official songs go up to ~1854, so custom charts use 2800-3071 (271 slots)
+const NAUTICA_ID_START = 2800;
 
 export async function GetNextNauticaId(): Promise<number> {
   const existing = await DB.FindOne<Counter>({ collection: 'counter', key: 'nautica_music_id' });

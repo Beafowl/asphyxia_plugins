@@ -146,7 +146,7 @@ $(document).ready(function () {
       if (this.checked) {
         $.fn.dataTable.ext.search.push(function (settings, data) {
           var id = parseInt(data[0]) || 0;
-          return id >= 10000;
+          return id >= 2800;
         });
       } else {
         $.fn.dataTable.ext.search.pop();

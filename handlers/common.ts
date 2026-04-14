@@ -260,7 +260,8 @@ export const common: EPR = async (info, data, send) => {
 
     // Include custom/curated songs (ID >= 10000) in music_limited
     if (mdb && mdb.mdb && mdb.mdb.music) {
-      const customSongs = mdb.mdb.music.filter((s: any) => parseInt(s.id) >= 10000);
+      // Custom charts use IDs 2800+ (game crashes at >= 3072)
+      const customSongs = mdb.mdb.music.filter((s: any) => parseInt(s.id) >= 2800);
       for (const songData of customSongs) {
         for (let j = 0; j < 6; j++) {
           if (songData.difficulty[diffName[j]] != '0') {
