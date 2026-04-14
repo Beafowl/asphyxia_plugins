@@ -23,6 +23,7 @@ function browseForNomination(page) {
     return;
   }
 
+  document.getElementById('nominate-results').innerHTML = '<div class="has-text-centered py-5"><span class="icon is-large"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></span></div>';
   emit('nauticaBrowse', { page: page, search: searchText }).then(function (response) {
     var result = response.data;
     if (!result || result.error) {

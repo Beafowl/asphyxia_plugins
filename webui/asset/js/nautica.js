@@ -20,6 +20,7 @@ function browseNautica(page) {
   searchInput.classList.add('is-loading');
 
   var searchText = searchInput.value || '';
+  document.getElementById('nautica-results').innerHTML = '<div class="has-text-centered py-5"><span class="icon is-large"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></span></div>';
   emit('nauticaBrowse', { page: page, search: searchText }).then(function (response) {
     searchInput.classList.remove('is-loading');
 
