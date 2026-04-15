@@ -32,6 +32,7 @@ function loadCustomCharts() {
 
       html += '<div class="chart-card">' +
         '<img class="jacket" src="' + (s.jacketUrl || '') + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
+        '<div class="card-body">' +
         '<div class="info">' +
           '<div class="title" title="' + escapeAttr(s.title || '') + '">' + escapeHtml(s.title || 'Untitled') +
             ' <a href="https://ksm.dev/songs/' + s.nauticaId + '" target="_blank" style="color:#666;text-decoration:none" title="View on ksm.dev"><i class="mdi mdi-open-in-new" style="font-size:0.75em"></i></a></div>' +
@@ -41,9 +42,9 @@ function loadCustomCharts() {
             var unique = eff.filter(function(v, i, a) { return a.indexOf(v) === i; });
             return unique.length > 0 ? '<div style="font-size:0.8em;color:#aaa;margin-top:0.25rem"><i class="mdi mdi-account" style="font-size:0.9em"></i> ' + escapeHtml(unique.join(', ')) + '</div>' : '';
           })() +
-          '<div class="charts">' + chipHtml + '</div>' +
           '<div class="id-badge">ID: ' + s.mid + '</div>' +
         '</div>' +
+        '<div class="charts">' + chipHtml + '</div>' +
         '<div class="actions">' +
           '<button class="button is-small is-info chart-preview-btn" data-id="' + s.nauticaId + '">' +
             '<span class="icon"><i class="mdi mdi-play"></i></span>' +
@@ -52,6 +53,7 @@ function loadCustomCharts() {
             '<span class="icon"><i class="mdi mdi-download"></i></span>' +
             '<span>Download</span>' +
           '</a>' +
+        '</div>' +
         '</div>' +
       '</div>';
     }

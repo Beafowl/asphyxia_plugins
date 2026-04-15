@@ -24,20 +24,36 @@ document.getElementById('nominate-search').addEventListener('input', function ()
   clearTimeout(nomDebounce);
   nomDebounce = setTimeout(function () {
     nomPage = 1;
+    document.getElementById('nom-page-input').value = 1;
     browseForNomination(1);
   }, 500);
 });
 
+document.getElementById('nom-prev-btn').addEventListener('click', function () {
+  if (nomPage > 1) browseForNomination(nomPage - 1);
+});
+
+document.getElementById('nom-next-btn').addEventListener('click', function () {
+  if (nomPage < nomTotalPages) browseForNomination(nomPage + 1);
+});
+
+document.getElementById('nom-page-input').addEventListener('change', function () {
+  var p = parseInt(this.value) || 1;
+  p = Math.max(1, Math.min(p, nomTotalPages));
+  this.value = p;
+  browseForNomination(p);
+});
+
 function browseForNomination(page) {
   var searchText = document.getElementById('nominate-search').value || '';
-  if (searchText.trim().length === 0) {
-    document.getElementById('nominate-results').innerHTML = '';
-    document.getElementById('nominate-pagination').innerHTML = '';
-    return;
-  }
 
-  document.getElementById('nominate-results').innerHTML = '<div class="has-text-centered py-5"><span class="icon is-large"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></span></div>';
-  emit('nauticaBrowse', { page: page, search: searchText }).then(function (response) {
+  var resultsEl = document.getElementById('nominate-results');
+  var h = resultsEl.offsetHeight;
+  if (h > 0) {
+    resultsEl.style.minHeight = h + 'px';
+  }
+  resultsEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:' + (h || 200) + 'px"><span class="icon is-large" style="color:#555"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></span></div>';
+  emit('nauticaBrowse', { page: page, search: searchText.trim() }).then(function (response) {
     var result = response.data;
     if (!result || result.error) {
       document.getElementById('nominate-results').innerHTML =
@@ -52,7 +68,7 @@ function browseForNomination(page) {
 
     var filtered = songs.filter(function (s) { return !existingNauticaIds.has(s.id); });
     renderNominationResults(filtered);
-    renderNomPagination();
+    updateNomPagination();
   });
 }
 
@@ -80,17 +96,18 @@ function renderNominationResults(songs) {
     var effectors = charts.map(function (c) { return c.effector; }).filter(Boolean);
     var uniqueEffectors = effectors.filter(function (v, i, a) { return a.indexOf(v) === i; });
     var effectorHtml = uniqueEffectors.length > 0
-      ? '<div style="font-size:0.8em;color:#aaa;margin-top:0.25rem"><i class="mdi mdi-account" style="font-size:0.9em"></i> ' + escapeHtml(uniqueEffectors.join(', ')) + '</div>'
+      ? '<div class="effector" style="font-size:0.8em;color:#aaa;padding:0 0.5rem"><i class="mdi mdi-account" style="font-size:0.9em"></i> ' + escapeHtml(uniqueEffectors.join(', ')) + '</div>'
       : '';
 
     html += '<div class="nautica-card" data-id="' + s.id + '">' +
       '<img class="jacket" src="' + (s.jacket_url || '') + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
+      '<div class="card-body">' +
       '<div class="info">' +
         '<div class="title" title="' + escapeAttr(s.title || '') + '">' + escapeHtml(s.title || 'Untitled') + '</div>' +
         '<div class="artist">' + escapeHtml(s.artist || 'Unknown') + '</div>' +
-        effectorHtml +
-        '<div class="charts">' + chipHtml + '</div>' +
       '</div>' +
+      effectorHtml +
+      '<div class="charts">' + chipHtml + '</div>' +
       '<div class="actions">' +
         (s.preview_url ?
           '<button class="button is-small is-info nom-preview-btn" data-url="' + escapeAttr(s.preview_url) + '">' +
@@ -110,10 +127,12 @@ function renderNominationResults(songs) {
           '<span>Nominate</span>' +
         '</button>' +
       '</div>' +
+      '</div>' +
     '</div>';
   }
   html += '</div>';
   container.innerHTML = html;
+  container.style.minHeight = '';
 
   var btns = container.querySelectorAll('.nominate-btn');
   for (var k = 0; k < btns.length; k++) {
@@ -182,19 +201,11 @@ function handleNominate(e) {
   });
 }
 
-function renderNomPagination() {
-  var container = document.getElementById('nominate-pagination');
-  var html = '';
-  if (nomPage > 1) {
-    html += '<button class="button is-small" onclick="browseForNomination(' + (nomPage - 1) + ')">Prev</button>';
-  }
-  if (nomTotalPages > 1) {
-    html += '<span>Page ' + nomPage + ' / ' + nomTotalPages + '</span>';
-  }
-  if (nomPage < nomTotalPages) {
-    html += '<button class="button is-small" onclick="browseForNomination(' + (nomPage + 1) + ')">Next</button>';
-  }
-  container.innerHTML = html;
+function updateNomPagination() {
+  document.getElementById('nom-page-input').value = nomPage;
+  document.getElementById('nom-page-total').textContent = '/ ' + nomTotalPages;
+  document.getElementById('nom-prev-btn').disabled = (nomPage <= 1);
+  document.getElementById('nom-next-btn').disabled = (nomPage >= nomTotalPages);
 }
 
 // ─── My Nominations ─────────────────────────────────────────────────────────
@@ -345,3 +356,4 @@ function escapeAttr(str) {
 
 loadMyNominations();
 loadTestingCharts();
+browseForNomination(1);

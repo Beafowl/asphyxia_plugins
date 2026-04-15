@@ -23,8 +23,24 @@ document.getElementById('nautica-search').addEventListener('input', function () 
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(function () {
     currentPage = 1;
+    document.getElementById('admin-page-input').value = 1;
     browseNautica(1);
   }, 500);
+});
+
+document.getElementById('admin-prev-btn').addEventListener('click', function () {
+  if (currentPage > 1) browseNautica(currentPage - 1);
+});
+
+document.getElementById('admin-next-btn').addEventListener('click', function () {
+  if (currentPage < totalPages) browseNautica(currentPage + 1);
+});
+
+document.getElementById('admin-page-input').addEventListener('change', function () {
+  var p = parseInt(this.value) || 1;
+  p = Math.max(1, Math.min(p, totalPages));
+  this.value = p;
+  browseNautica(p);
 });
 
 function browseNautica(page) {
@@ -32,7 +48,10 @@ function browseNautica(page) {
   searchInput.classList.add('is-loading');
 
   var searchText = searchInput.value || '';
-  document.getElementById('nautica-results').innerHTML = '<div class="has-text-centered py-5"><span class="icon is-large"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></span></div>';
+  var resultsEl = document.getElementById('nautica-results');
+  var h = resultsEl.offsetHeight;
+  if (h > 0) resultsEl.style.minHeight = h + 'px';
+  resultsEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:' + (h || 200) + 'px"><span class="icon is-large" style="color:#555"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></span></div>';
   emit('nauticaBrowse', { page: page, search: searchText }).then(function (response) {
     searchInput.classList.remove('is-loading');
 
@@ -50,7 +69,7 @@ function browseNautica(page) {
 
     var filtered = songs.filter(function (s) { return !existingNauticaIds.has(s.id); });
     renderNauticaResults(filtered);
-    renderPagination();
+    updateAdminPagination();
   });
 }
 
@@ -81,18 +100,19 @@ function renderNauticaResults(songs) {
     var effectors = charts.map(function (c) { return c.effector; }).filter(Boolean);
     var uniqueEffectors = effectors.filter(function (v, i, a) { return a.indexOf(v) === i; });
     var effectorHtml = uniqueEffectors.length > 0
-      ? '<div style="font-size:0.8em;color:#aaa;margin-top:0.25rem"><i class="mdi mdi-account" style="font-size:0.9em"></i> ' + escapeHtml(uniqueEffectors.join(', ')) + '</div>'
+      ? '<div class="effector" style="font-size:0.8em;color:#aaa;padding:0 0.5rem"><i class="mdi mdi-account" style="font-size:0.9em"></i> ' + escapeHtml(uniqueEffectors.join(', ')) + '</div>'
       : '';
 
     html += '<div class="nautica-card" data-id="' + s.id + '">' +
       '<img class="jacket" src="' + (s.jacket_url || '') + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
+      '<div class="card-body">' +
       '<div class="info">' +
         '<div class="title" title="' + escapeAttr(s.title || '') + '">' + escapeHtml(s.title || 'Untitled') + '</div>' +
         '<div class="artist">' + escapeHtml(s.artist || 'Unknown') + '</div>' +
-        effectorHtml +
-        '<div class="charts">' + chipHtml + '</div>' +
-        tagHtml +
       '</div>' +
+      effectorHtml +
+      tagHtml +
+      '<div class="charts">' + chipHtml + '</div>' +
       '<div class="actions">' +
         (s.preview_url ?
           '<button class="button is-small is-info admin-preview-btn" data-url="' + escapeAttr(s.preview_url) + '">' +
@@ -112,10 +132,12 @@ function renderNauticaResults(songs) {
           '<span>Approve</span>' +
         '</button>' +
       '</div>' +
+      '</div>' +
     '</div>';
   }
   html += '</div>';
   container.innerHTML = html;
+  container.style.minHeight = '';
 
   var btns = container.querySelectorAll('.nautica-approve-btn');
   for (var k = 0; k < btns.length; k++) {
@@ -178,17 +200,11 @@ function handleApprove(e) {
   });
 }
 
-function renderPagination() {
-  var container = document.getElementById('nautica-pagination');
-  var html = '';
-  if (currentPage > 1) {
-    html += '<button class="button is-small" onclick="browseNautica(' + (currentPage - 1) + ')">Prev</button>';
-  }
-  html += '<span>Page ' + currentPage + ' / ' + totalPages + '</span>';
-  if (currentPage < totalPages) {
-    html += '<button class="button is-small" onclick="browseNautica(' + (currentPage + 1) + ')">Next</button>';
-  }
-  container.innerHTML = html;
+function updateAdminPagination() {
+  document.getElementById('admin-page-input').value = currentPage;
+  document.getElementById('admin-page-total').textContent = '/ ' + totalPages;
+  document.getElementById('admin-prev-btn').disabled = (currentPage <= 1);
+  document.getElementById('admin-next-btn').disabled = (currentPage >= totalPages);
 }
 
 // ─── Nominations Queue ──────────────────────────────────────────────────────
