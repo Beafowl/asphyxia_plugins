@@ -34,8 +34,12 @@ div
     .card-content
       p.mb-3 Search for a chart on Nautica and nominate it for review. Admins will review nominations and approved charts will be added to the server.
       .field
-        .control
-          input.input#nominate-search(type="text" placeholder="Search charts on Nautica...")
+        .control.is-expanded
+          input.input#nominate-search(type="text" placeholder="Search by title, artist or effector...")
+        p.help.mt-2
+          span.icon.is-small(style="vertical-align:middle")
+            i.mdi.mdi-information-outline
+          |  Tip: use #[code level:13] or #[code levels:13,14,15] to filter by chart level.
       #nominate-results
       .pagination-controls#nominate-pagination
 

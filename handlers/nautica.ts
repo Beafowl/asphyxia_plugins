@@ -4,7 +4,8 @@ import * as path from 'path';
 import archiver from 'archiver';
 import { NauticaSong } from '../models/nautica_song';
 import { NominationFeedback } from '../models/nomination_feedback';
-import { GetNextNauticaId, invalidateMusicDbCache } from '../utils';
+import { MusicRecord } from '../models/music_record';
+import { invalidateMusicDbCache } from '../utils';
 import { convertNauticaSong } from './converter';
 import { WebUISend } from '../../../src/eamuse/EamusePlugin';
 
@@ -24,15 +25,65 @@ function nauticaGet(urlPath: string): Promise<any> {
 
 // ─── Browse Nautica API ─────────────────────────────────────────────────────
 
+function parseSearch(input: string): { text: string; levels: string | null } {
+  let text = input;
+  let levels: string | null = null;
+
+  // Extract level:X or levels:X,Y,Z from the query
+  const levelMatch = text.match(/\blevels?:(\d+(?:,\d+)*)\b/i);
+  if (levelMatch) {
+    levels = levelMatch[1];
+    text = text.replace(levelMatch[0], '').trim();
+  }
+
+  return { text, levels };
+}
+
 export const nauticaBrowse = async (data: { page?: number; search?: string }, send: WebUISend) => {
   try {
     const page = data.page || 1;
-    let url = `/app/songs?page=${page}`;
-    if (data.search && data.search.trim().length > 0) {
-      url += `&q=${encodeURIComponent(data.search.trim())}`;
+    const raw = (data.search || '').trim();
+
+    if (!raw) {
+      const result = await nauticaGet(`/app/songs?page=${page}`);
+      send.json(result);
+      return;
     }
-    const result = await nauticaGet(url);
-    send.json(result);
+
+    const { text, levels } = parseSearch(raw);
+    const levelParam = levels ? `&levels=${levels}` : '';
+
+    // No text query — just filter by level
+    if (!text) {
+      const result = await nauticaGet(`/app/songs?page=${page}${levelParam}`);
+      send.json(result);
+      return;
+    }
+
+    // Search by title/artist AND effector, merge results
+    const [titleResult, effectorResult] = await Promise.all([
+      nauticaGet(`/app/songs?page=${page}&q=${encodeURIComponent(text)}${levelParam}`),
+      nauticaGet(`/app/songs?page=${page}&effector=${encodeURIComponent(text)}${levelParam}`),
+    ]);
+
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const song of [...(titleResult.data || []), ...(effectorResult.data || [])]) {
+      if (!seen.has(song.id)) {
+        seen.add(song.id);
+        merged.push(song);
+      }
+    }
+
+    const titleMeta = titleResult.meta || {};
+    const effectorMeta = effectorResult.meta || {};
+    send.json({
+      data: merged,
+      meta: {
+        current_page: page,
+        last_page: Math.max(titleMeta.last_page || 1, effectorMeta.last_page || 1),
+      },
+    });
   } catch (err: any) {
     send.json({ error: err.message || 'Failed to fetch from Nautica' });
   }
@@ -210,12 +261,6 @@ export const nauticaSetTesting = async (data: any, send: WebUISend) => {
     // On staging servers, auto-convert for playtesting
     const mode = U.GetConfig('sdvx_nomination_mode') || 'production';
     if (mode === 'staging' && song.mid === 0) {
-      const mid = await GetNextNauticaId();
-      await DB.Update<NauticaSong>(
-        { collection: 'nautica_song', nauticaId: data.nauticaId },
-        { $set: { mid } }
-      );
-      song.mid = mid;
       convertNauticaSong(song).catch((err) => {
         console.error(`[Nautica] Staging conversion failed for ${song.title}: ${err.message}`);
       });
@@ -267,23 +312,21 @@ export const nauticaApprove = async (data: any, send: WebUISend) => {
 
     // Approving an existing nomination
     if (existing && (existing.status === 'nominated' || existing.status === 'testing')) {
-      const mid = existing.mid > 0 ? existing.mid : await GetNextNauticaId();
       await DB.Update<NauticaSong>(
         { collection: 'nautica_song', nauticaId: data.nauticaId },
         { $set: {
           status: 'pending' as const,
-          mid,
           curatedBy: data.__username || 'admin',
           curatedAt: Date.now(),
         }}
       );
 
-      const song = { ...existing, mid, status: 'pending' as const };
+      const song = { ...existing, status: 'pending' as const };
       convertNauticaSong(song as any).catch((err) => {
         console.error(`[Nautica] Conversion failed for ${song.title}: ${err.message}`);
       });
 
-      send.json({ success: true, mid, title: existing.title });
+      send.json({ success: true, title: existing.title });
       return;
     }
 
@@ -293,12 +336,10 @@ export const nauticaApprove = async (data: any, send: WebUISend) => {
       return;
     }
 
-    const musicId = await GetNextNauticaId();
-
     const song: any = {
       collection: 'nautica_song',
       nauticaId: data.nauticaId,
-      mid: musicId,
+      mid: 0,
       title: data.title,
       artist: data.artist,
       jacketUrl: data.jacketUrl,
@@ -316,7 +357,7 @@ export const nauticaApprove = async (data: any, send: WebUISend) => {
       console.error(`[Nautica] Conversion failed for ${song.title}: ${err.message}`);
     });
 
-    send.json({ success: true, mid: musicId, title: data.title });
+    send.json({ success: true, title: data.title });
   } catch (err: any) {
     send.json({ error: err.message || 'Failed to approve song' });
   }
@@ -341,8 +382,12 @@ export const nauticaRemove = async (data: { nauticaId: string }, send: WebUISend
     if (!song) { send.json({ error: 'Song not found' }); return; }
 
     await DB.Remove<NauticaSong>({ collection: 'nautica_song', nauticaId: data.nauticaId });
+    await DB.Remove<NominationFeedback>({ collection: 'nomination_feedback', nauticaId: data.nauticaId });
 
     if (song.mid > 0) {
+      // Delete all player scores for this music ID so it can be reused
+      await DB.Remove<MusicRecord>(null, { collection: 'music', mid: song.mid });
+
       removeFromCustomMusicDb(song.mid);
 
       const gameRoot = U.GetConfig('sdvx_eg_root_dir');

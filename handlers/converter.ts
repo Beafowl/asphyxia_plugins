@@ -4,7 +4,7 @@ import * as https from 'https';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import { NauticaSong } from '../models/nautica_song';
-import { invalidateMusicDbCache } from '../utils';
+import { GetNextNauticaId, invalidateMusicDbCache } from '../utils';
 
 // Conversion queue to avoid parallel CPU-heavy operations
 let conversionQueue: NauticaSong[] = [];
@@ -22,9 +22,13 @@ async function processQueue() {
   while (conversionQueue.length > 0) {
     const song = conversionQueue.shift()!;
     try {
+      // Allocate music ID here inside the sequential queue to prevent duplicates
+      if (!song.mid || song.mid === 0) {
+        song.mid = await GetNextNauticaId();
+      }
       await DB.Update<NauticaSong>(
         { collection: 'nautica_song', nauticaId: song.nauticaId },
-        { $set: { status: 'converting' as const } }
+        { $set: { status: 'converting' as const, mid: song.mid } }
       );
       await doConversion(song);
       await DB.Update<NauticaSong>(

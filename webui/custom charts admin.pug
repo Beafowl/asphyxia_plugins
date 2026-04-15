@@ -31,8 +31,12 @@ div
 
       h5.title.is-5 Browse Nautica
       .field
-        .control
-          input.input#nautica-search(type="text" placeholder="Search charts on Nautica...")
+        .control.is-expanded
+          input.input#nautica-search(type="text" placeholder="Search by title, artist or effector...")
+        p.help.mt-2
+          span.icon.is-small(style="vertical-align:middle")
+            i.mdi.mdi-information-outline
+          |  Tip: use #[code level:13] or #[code levels:13,14,15] to filter by chart level.
 
       #nautica-results
       .pagination-controls#nautica-pagination

@@ -122,7 +122,7 @@ function handleApprove(e) {
     } else {
       btn.classList.remove('is-success');
       btn.classList.add('is-info');
-      btn.innerHTML = '<span class="icon"><i class="mdi mdi-check-all"></i></span><span>Approved (ID ' + result.mid + ')</span>';
+      btn.innerHTML = '<span class="icon"><i class="mdi mdi-check-all"></i></span><span>Approved — converting...</span>';
       refreshCuratedList();
       refreshNominationQueue();
     }

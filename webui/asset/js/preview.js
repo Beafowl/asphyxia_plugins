@@ -7,59 +7,66 @@ function zeroPad(num, places) {
 }
 
 function getImageFileFormat(assetType, id) {
-    // if(assetType == 0) {
-    //     if (id >= 103) return '.png' 
-    //     return '.jpg'
-    // }
     return '.png'
 }
 
-(function($) {
-    $.preload = function() {
-        var imgs = Object.prototype.toString.call(arguments[0]) === '[object Array]' ?
-            arguments[0] : arguments;
+function getStampSrc(stamp) {
+    if (stamp == 0 || stamp == null) return "static/asset/nostamp.png";
+    var group = Math.trunc((stamp - 1) / 4 + 1);
+    var item = stamp % 4;
+    if (item == 0) item = 4;
+    return "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png";
+}
 
-        var tmp = [];
-        var i = imgs.length;
+function getNemsysSrc(val, version) {
+    if (val == 30) return "static/asset/nemsys/nemsys_aprilfool.png";
+    var nem = (version === 7 && val === 0) ? 47 : val;
+    return "static/asset/nemsys/nemsys_" + zeroPad(nem, 4) + ".png";
+}
 
-        // reverse loop run faster
-        for (; i--;) tmp.push($('<img />').attr('src', imgs[i]));
-    };
-})(jQuery);
+function getSubbgSrc(val, type) {
+    if (type === 'video') return null; // handled separately
+    if (type === 'slideshow') {
+        return "static/asset/submonitor_bg/subbg_" + zeroPad(val, 4) + "_0" + (Math.floor(Math.random() * 3) + 1) + getImageFileFormat(0, parseInt(zeroPad(val, 4)));
+    }
+    return "static/asset/submonitor_bg/subbg_" + zeroPad(val, 4) + getImageFileFormat(0, parseInt(zeroPad(val, 4)));
+}
+
+// Change handlers — only load the single selected asset on demand
 
 $('#nemsys_select').change(function() {
-    $('#nemsys_pre').fadeOut(200, () => {
-        if ($('#nemsys_select').val() != 30) {
-            $('#nemsys_pre').attr("src", "static/asset/nemsys/nemsys_" + zeroPad($('#nemsys_select').val(), 4) + ".png");
-        } else {
-            $('#nemsys_pre').attr("src", "static/asset/nemsys/nemsys_aprilfool.png");
-        }
-
+    $('#nemsys_pre').fadeOut(200, function() {
+        $(this).attr("src", getNemsysSrc(parseInt($('#nemsys_select').val()), currentVersion));
     });
     $('#nemsys_pre').fadeIn(200);
 });
 
-$('[name="subbg"]').change(async function() {
-    let subbgType = database['subbg'].filter((e => e.value === parseInt($('[name="subbg"]').val())))[0]['type']
-    let isSubbgSlideshow = (subbgType === 'slideshow')
-    $('#sub_pre').fadeOut(200)
-    $('#sub_pre_vid').fadeOut(200)
-    if(subbgType === 'video') {
-        $('#sub_pre_vid_src').attr('src', "static/asset/submonitor_bg/subbg_" + zeroPad($('[name="subbg"]').val(), 4) + '.mp4')
-        document.getElementById('sub_pre_vid').load()
-        $('#sub_pre_vid').fadeIn(200)
+$('[name="subbg"]').change(function() {
+    var val = parseInt($(this).val());
+    var entry = database['subbg'].filter(function(e) { return e.value === val; })[0];
+    var subbgType = entry ? entry.type : 'normal';
+    $('#sub_pre').fadeOut(200);
+    $('#sub_pre_vid').fadeOut(200);
+    if (subbgType === 'video') {
+        $('#sub_pre_vid_src').attr('src', "static/asset/submonitor_bg/subbg_" + zeroPad(val, 4) + '.mp4');
+        document.getElementById('sub_pre_vid').load();
+        $('#sub_pre_vid').fadeIn(200);
     } else {
-        $('#sub_pre').fadeOut(200, () => { $('#sub_pre').attr("src", isSubbgSlideshow ? "static/asset/submonitor_bg/subbg_" + zeroPad($('[name="subbg"]').val(), 4) + "_0" + (Math.floor(Math.random() * 3) + 1) + getImageFileFormat(0, parseInt(zeroPad($('[name="subbg"]').val(), 4))) : "static/asset/submonitor_bg/subbg_" + zeroPad($('[name="subbg"]').val(), 4) + getImageFileFormat(0, parseInt(zeroPad($('[name="subbg"]').val(), 4)) )); });
+        $('#sub_pre').fadeOut(200, function() {
+            $(this).attr("src", getSubbgSrc(val, subbgType));
+        });
         $('#sub_pre').fadeIn(200);
     }
 });
 
 $('[name="bgm"]').change(function() {
-    $('#custom_0').attr("src", "static/asset/audio/custom_" + zeroPad($('[name="bgm"]').val(), 2) + "/0.mp3");
-    $('#custom_1').attr("src", "static/asset/audio/custom_" + zeroPad($('[name="bgm"]').val(), 2) + "/1.mp3");
-    if ($('[name="bgm"]').val() == 99) {
+    var val = $(this).val();
+    if (val == 99) {
         $('#custom_0').attr("src", "static/asset/audio/special_00/0.mp3");
         $('#custom_1').attr("src", "static/asset/audio/custom_00/1.mp3");
+    } else {
+        $('#custom_0').attr("src", "static/asset/audio/custom_" + zeroPad(val, 2) + "/0.mp3");
+        $('#custom_1').attr("src", "static/asset/audio/custom_" + zeroPad(val, 2) + "/1.mp3");
     }
     $('#custom_0').prop("volume", 0.5);
     $('#custom_1').prop("volume", 0.2);
@@ -68,155 +75,47 @@ $('[name="bgm"]').change(function() {
         $(this).text('Play').animate({ 'opacity': 1 }, 200);
     });
     play_sel = false;
-
     $('#play_bgm').animate({ 'opacity': 0 }, 200, function() {
         $(this).text('Play').animate({ 'opacity': 1 }, 200);
     });
-
     play_bgm = false;
 });
 
-var testcurrent = 2.8;
+// Stamp change handlers — use shared helper
+var stampFields = ['stampA', 'stampB', 'stampC', 'stampD', 'stampRA', 'stampRB', 'stampRC', 'stampRD'];
+var stampPreviews = { stampA: '#a_pre', stampB: '#b_pre', stampC: '#c_pre', stampD: '#d_pre', stampRA: '#ra_pre', stampRB: '#rb_pre', stampRC: '#rc_pre', stampRD: '#rd_pre' };
 
-$('[name="stampA"]').change(function() {
-    $('#a_pre').fadeOut(200, () => {
-        var stamp = $('[name="stampA"]').val();
-        if (stamp == 0) {
-            $('#a_pre').attr("src", "static/asset/nostamp.png");
-        } else {
-            var group = Math.trunc((stamp - 1) / 4 + 1);
-            var item = stamp % 4;
-            if (item == 0) item = 4;
-            $('#a_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-        }
+stampFields.forEach(function(field) {
+    $('[name="' + field + '"]').change(function() {
+        var previewEl = $(stampPreviews[field]);
+        previewEl.fadeOut(200, function() {
+            $(this).attr("src", getStampSrc(parseInt($('[name="' + field + '"]').val())));
+        });
+        previewEl.fadeIn(200);
     });
-    $('#a_pre').fadeIn(200);
 });
 
-$('[name="stampB"]').change(function() {
-    $('#b_pre').fadeOut(200, () => {
-        var stamp = $('[name="stampB"]').val();
-        if (stamp == 0) {
-            $('#b_pre').attr("src", "static/asset/nostamp.png");
-        } else {
-            var group = Math.trunc((stamp - 1) / 4 + 1);
-            var item = stamp % 4;
-            if (item == 0) item = 4;
-            $('#b_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-        }
-    });
-    $('#b_pre').fadeIn(200);
-});
-
-$('[name="stampC"]').change(function() {
-    $('#c_pre').fadeOut(200, () => {
-        var stamp = $('[name="stampC"]').val();
-        if (stamp == 0) {
-            $('#c_pre').attr("src", "static/asset/nostamp.png");
-        } else {
-            var group = Math.trunc((stamp - 1) / 4 + 1);
-            var item = stamp % 4;
-            if (item == 0) item = 4;
-            $('#c_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-        }
-    });
-    $('#c_pre').fadeIn(200);
-});
-
-$('[name="stampD"]').change(function() {
-    $('#d_pre').fadeOut(200, () => {
-        var stamp = $('[name="stampD"]').val();
-        if (stamp == 0) {
-            $('#d_pre').attr("src", "static/asset/nostamp.png");
-        } else {
-            var group = Math.trunc((stamp - 1) / 4 + 1);
-            var item = stamp % 4;
-            if (item == 0) item = 4;
-            $('#d_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-        }
-    });
-    $('#d_pre').fadeIn(200);
-});
-
-$('[name="stampRA"]').change(function() {
-    $('#ra_pre').fadeOut(200, () => {
-        var stamp = $('[name="stampRA"]').val();
-        if (stamp == 0) {
-            $('#ra_pre').attr("src", "static/asset/nostamp.png");
-        } else {
-            var group = Math.trunc((stamp - 1) / 4 + 1);
-            var item = stamp % 4;
-            if (item == 0) item = 4;
-            $('#ra_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-        }
-    });
-    $('#ra_pre').fadeIn(200);
-});
-
-$('[name="stampRB"]').change(function() {
-    $('#rb_pre').fadeOut(200, () => {
-        var stamp = $('[name="stampRB"]').val();
-        if (stamp == 0) {
-            $('#rb_pre').attr("src", "static/asset/nostamp.png");
-        } else {
-            var group = Math.trunc((stamp - 1) / 4 + 1);
-            var item = stamp % 4;
-            if (item == 0) item = 4;
-            $('#rb_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-        }
-    });
-    $('#rb_pre').fadeIn(200);
-});
-
-$('[name="stampRC"]').change(function() {
-    $('#rc_pre').fadeOut(200, () => {
-        var stamp = $('[name="stampRC"]').val();
-        if (stamp == 0) {
-            $('#rc_pre').attr("src", "static/asset/nostamp.png");
-        } else {
-            var group = Math.trunc((stamp - 1) / 4 + 1);
-            var item = stamp % 4;
-            if (item == 0) item = 4;
-            $('#rc_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-        }
-    });
-    $('#rc_pre').fadeIn(200);
-});
-
-$('[name="stampRD"]').change(function() {
-    $('#rd_pre').fadeOut(200, () => {
-        var stamp = $('[name="stampRD"]').val();
-        if (stamp == 0) {
-            $('#rd_pre').attr("src", "static/asset/nostamp.png");
-        } else {
-            var group = Math.trunc((stamp - 1) / 4 + 1);
-            var item = stamp % 4;
-            if (item == 0) item = 4;
-            $('#rd_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-        }
-    });
-    $('#rd_pre').fadeIn(200);
-});
 var profile_data, database;
 var play_bgm = false;
 var play_sel = false;
+
 $(document).ready(function() {
     profile_data = JSON.parse(document.getElementById("data-pass").innerText);
-    let urlParams = new URLSearchParams(window.location.search);
-    currentVersion = (urlParams.has('version') && urlParams.get('version') !== "") ? parseInt(urlParams.get('version')) : profile_data[profile_data.length - 1].version
-    currentProfile = profile_data.find(p => p.version === currentVersion)
-    $('[name="version"]').val(currentVersion)
+    var urlParams = new URLSearchParams(window.location.search);
+    currentVersion = (urlParams.has('version') && urlParams.get('version') !== "") ? parseInt(urlParams.get('version')) : profile_data[profile_data.length - 1].version;
+    currentProfile = profile_data.find(function(p) { return p.version === currentVersion; });
+    $('[name="version"]').val(currentVersion);
 
-    items_crew = JSON.parse(document.getElementById("data-pass-crew").innerText);
-    items_stamp = JSON.parse(document.getElementById("data-pass-stamp").innerText).filter(i => i.version === currentVersion);
-    items_subbg = JSON.parse(document.getElementById("data-pass-subbg").innerText).filter(i => i.version === currentVersion);
-    items_bgm = JSON.parse(document.getElementById("data-pass-bgm").innerText).filter(i => i.version === currentVersion);
-    items_nemsys = JSON.parse(document.getElementById("data-pass-nemsys").innerText).filter(i => i.version === currentVersion);
-    items_sysbg = JSON.parse(document.getElementById("data-pass-sysbg").innerText).filter(i => i.version === currentVersion);
-    valgene_ticket = JSON.parse(document.getElementById("data-pass-valgeneticket").innerText);
-    courses = JSON.parse(document.getElementById("data-pass-courses").innerText).filter(i => i.version === currentVersion);
-    skill = JSON.parse(document.getElementById("data-pass-skill").innerText).filter(i => i.version === currentVersion);
-    unlock_all = (document.getElementById("data-pass-unlock-all").innerText === 'true');
+    var items_crew = JSON.parse(document.getElementById("data-pass-crew").innerText);
+    var items_stamp = JSON.parse(document.getElementById("data-pass-stamp").innerText).filter(function(i) { return i.version === currentVersion; });
+    var items_subbg = JSON.parse(document.getElementById("data-pass-subbg").innerText).filter(function(i) { return i.version === currentVersion; });
+    var items_bgm = JSON.parse(document.getElementById("data-pass-bgm").innerText).filter(function(i) { return i.version === currentVersion; });
+    var items_nemsys = JSON.parse(document.getElementById("data-pass-nemsys").innerText).filter(function(i) { return i.version === currentVersion; });
+    var items_sysbg = JSON.parse(document.getElementById("data-pass-sysbg").innerText).filter(function(i) { return i.version === currentVersion; });
+    var valgene_ticket = JSON.parse(document.getElementById("data-pass-valgeneticket").innerText);
+    var courses = JSON.parse(document.getElementById("data-pass-courses").innerText).filter(function(i) { return i.version === currentVersion; });
+    var skill = JSON.parse(document.getElementById("data-pass-skill").innerText).filter(function(i) { return i.version === currentVersion; });
+    var unlock_all = (document.getElementById("data-pass-unlock-all").innerText === 'true');
 
     for (var p of profile_data) {
         $('#version_select').append($('<option>', {
@@ -226,380 +125,234 @@ $(document).ready(function() {
         }));
     }
 
-    $.getJSON("static/asset/json/customize_data_ext.json", function(json) {
-        database = json;
+    // Load customize_data_ext.json first, then data.json (single load)
+    $.getJSON("static/asset/json/customize_data_ext.json", function(extJson) {
+        database = extJson;
 
-        let name = currentProfile.name
-        $('[name="name').attr('placeholder', currentProfile.name)
+        $('[name="name"]').attr('placeholder', currentProfile.name);
+        $('[name="appeal"]').attr('placeholder', currentProfile.appeal);
 
-        let ap = currentProfile.appeal
-        $('[name="appeal').attr('placeholder', currentProfile.appeal)
-
-        for (var i in json["supportTeams"]) {
+        for (var i in extJson["supportTeams"]) {
             $('[name="bplSupport"]').append($('<option>', {
-                value: json["supportTeams"][i].id,
-                text: json["supportTeams"][i].name,
+                value: extJson["supportTeams"][i].id,
+                text: extJson["supportTeams"][i].name,
             }));
         }
-        let bplSupport = currentProfile["bplSupport"] ? currentProfile["bplSupport"] % 10 : 0
+        var bplSupport = currentProfile["bplSupport"] ? currentProfile["bplSupport"] % 10 : 0;
         $('[name="bplSupport"]').val(bplSupport);
+        if (currentProfile["bplSupport"] >= 10) $('[name="bplPro"]').attr('checked', true);
 
-        if(currentProfile["bplSupport"] >= 10) $('[name="bplPro"]').attr('checked', true);
-
-        for (var i in json["sysbg"]) {
-            if(unlock_all || (items_sysbg.find(x => x.id === json["sysbg"][i].id) || json["sysbg"][i].id === 0)) {
+        for (var i in extJson["sysbg"]) {
+            if (unlock_all || (items_sysbg.find(function(x) { return x.id === extJson["sysbg"][i].id; }) || extJson["sysbg"][i].id === 0)) {
                 $('[name="sysBG"]').append($('<option>', {
-                    value: json["sysbg"][i].id,
-                    text: json["sysbg"][i].name,
+                    value: extJson["sysbg"][i].id,
+                    text: extJson["sysbg"][i].name,
                 }));
             }
         }
         $('[name="sysBG"]').val(currentProfile["sysBG"] ? currentProfile["sysBG"] : 0);
 
-        for (var i in json["skilltitle"]) {
-            let foundCourses = courses.filter(c => c.cid === json["skilltitle"][i].id && c.clear >= 2)
-            if(foundCourses.length > 0) {
+        for (var i in extJson["skilltitle"]) {
+            var foundCourses = courses.filter(function(c) { return c.cid === extJson["skilltitle"][i].id && c.clear >= 2; });
+            if (foundCourses.length > 0) {
                 $('[name="skilltitle"]').append($('<option>', {
-                    value: json["skilltitle"][i].id,
-                    text: json["skilltitle"][i].name + ' (' + json["skilltitle"][i].info + ')',
+                    value: extJson["skilltitle"][i].id,
+                    text: extJson["skilltitle"][i].name + ' (' + extJson["skilltitle"][i].info + ')',
                 }));
             }
         }
-        if(skill.length > 1) $('[name="skilltitle"]').val(skill[0]["name"]);
-        else $('[name="skilltitle"]').attr('disabled', 'disabled')
+        if (skill.length > 1) $('[name="skilltitle"]').val(skill[0]["name"]);
+        else $('[name="skilltitle"]').attr('disabled', 'disabled');
 
-        for (var i in json["appeal_frame"]) {
+        for (var i in extJson["appeal_frame"]) {
             $('[name="creatorItem"]').append($('<option>', {
-                value: json["appeal_frame"][i].id,
-                text: json["appeal_frame"][i].name,
+                value: extJson["appeal_frame"][i].id,
+                text: extJson["appeal_frame"][i].name,
             }));
         }
         $('[name="creatorItem"]').val(currentProfile["creatorItem"] ? currentProfile["creatorItem"] : 1);
-    });
 
-    $.getJSON("static/asset/json/data.json", function(json) {
-        database = json;
+        // Load data.json ONCE — populate dropdowns without preloading assets
+        $.getJSON("static/asset/json/data.json", function(json) {
+            database = json;
 
-        //console.log(json); // this will show the info it in firebug console
-        //console.log(profile_data);
-
-        for (var i in json["nemsys"]) {
-            if(![8, 9, 10, 11, 47].includes(json["nemsys"][i].value) && (unlock_all || (json["nemsys"][i].value === 0 || items_nemsys.find(x => x.id === json["nemsys"][i].value)))) {
-                $('#nemsys_select').append($('<option>', {
-                    value: json["nemsys"][i].value,
-                    text: json["nemsys"][i].name + ((json["nemsys"][i].value == '0') ? (currentVersion === 7 ? 'NABLA' : 'EXCEED') : ''),
-                }));
-                var image = new Image();
-                if (json["nemsys"][i].value != 30) {
-                    let nem = (currentProfile['version'] === 7 && json["nemsys"][i].value === 0) ? 47 : json["nemsys"][i].value
-                    image.src = "static/asset/nemsys/nemsys_" + zeroPad(nem, 4) + ".png";
-                } else {
-                    image.src = "static/asset/nemsys/nemsys_aprilfool.png";
+            // Nemsys — populate dropdown only
+            for (var i in json["nemsys"]) {
+                if (![8, 9, 10, 11, 47].includes(json["nemsys"][i].value) && (unlock_all || (json["nemsys"][i].value === 0 || items_nemsys.find(function(x) { return x.id === json["nemsys"][i].value; })))) {
+                    $('#nemsys_select').append($('<option>', {
+                        value: json["nemsys"][i].value,
+                        text: json["nemsys"][i].name + ((json["nemsys"][i].value == '0') ? (currentVersion === 7 ? 'NABLA' : 'EXCEED') : ''),
+                    }));
                 }
-                //console.log(profile_data["nemsys"])
             }
-                
-        }
-        $('#nemsys_select').val(currentProfile["nemsys"]);
+            $('#nemsys_select').val(currentProfile["nemsys"]);
 
-        for (var i in json["subbg"]) {
-            
-            if(unlock_all || (json["subbg"][i].value === 0 || items_subbg.find(x => x.id === json["subbg"][i].value))) {
-                $('[name="subbg"]').append($('<option>', {
-                    value: json["subbg"][i].value,
-                    type: json["subbg"][i].type,
-                    text: json["subbg"][i].name,
-                }));
-                var image = new Image();
-                if (json["subbg"][i].type === 'slideshow') {
-                    image.src = "static/asset/submonitor_bg/subbg_" + zeroPad(json["subbg"][i].value, 4) + "_0" + (Math.floor(Math.random() * 3) + 1) + getImageFileFormat(0, parseInt(zeroPad(json["subbg"][i].value, 4)));
-                } else if (json["subbg"][i].type === 'normal') {
-                    image.src = "static/asset/submonitor_bg/subbg_" + zeroPad(json["subbg"][i].value, 4) + getImageFileFormat(0, parseInt(zeroPad(json["subbg"][i].value, 4)));
+            // Subbg — populate dropdown only
+            for (var i in json["subbg"]) {
+                if (unlock_all || (json["subbg"][i].value === 0 || items_subbg.find(function(x) { return x.id === json["subbg"][i].value; }))) {
+                    $('[name="subbg"]').append($('<option>', {
+                        value: json["subbg"][i].value,
+                        type: json["subbg"][i].type,
+                        text: json["subbg"][i].name,
+                    }));
                 }
-                // console.log(image);
-                //console.log(profile_data["subbg"])
             }
-        }
-        $('[name="subbg"]').val(currentProfile["subbg"]);
+            $('[name="subbg"]').val(currentProfile["subbg"]);
 
-        for (var i in json["bgm"]) {
-            if(unlock_all || (json["bgm"][i].value === 0 || items_bgm.find(x => parseInt(x.id) === parseInt(json["bgm"][i].value)))) {
-                $('[name="bgm"]').append($('<option>', {
-                    value: json["bgm"][i].value,
-                    text: json["bgm"][i].name,
-                }));
-                var audio = new Audio();
-                var audio1 = new Audio();
-                if (json["bgm"][i].value == 99) {
-                    audio.src = "static/asset/audio/special_00/0.mp3"
-                } else {
-                    audio.src = "static/asset/audio/custom_" + zeroPad(json["bgm"][i].value, 2) + "/0.mp3"
-                    audio1.src = "static/asset/audio/custom_" + zeroPad(json["bgm"][i].value, 2) + "/1.mp3"
+            // BGM — populate dropdown only
+            for (var i in json["bgm"]) {
+                if (unlock_all || (json["bgm"][i].value === 0 || items_bgm.find(function(x) { return parseInt(x.id) === parseInt(json["bgm"][i].value); }))) {
+                    $('[name="bgm"]').append($('<option>', {
+                        value: json["bgm"][i].value,
+                        text: json["bgm"][i].name,
+                    }));
                 }
-
-                //console.log(profile_data["bgm"])
             }
-        }
-        $('[name="bgm"]').val(currentProfile["bgm"]);
+            $('[name="bgm"]').val(currentProfile["bgm"]);
 
-        for (var i in json["akaname"]) {
-            $('[name="akaname"]').append($('<option>', {
-                value: json["akaname"][i].value,
-                text: json["akaname"][i].value + " - " + json["akaname"][i].name,
-            }));
-            //console.log(profile_data["akaname"])
-        }
-        $('[name="akaname"]').val(currentProfile["akaname"]);
-
-        let ticketNum = (valgene_ticket !== null) ? valgene_ticket.ticketNum : 0
-        $('[name="valgeneTicket"]').val(ticketNum)
-
-        for (var i in json["stamp"]) {
-            if(unlock_all || (json["stamp"][i].value === 0 || items_stamp.find(x => x.id === json["stamp"][i].value))) {
-                $('[name="stampA"]').append($('<option>', {
-                    value: json["stamp"][i].value,
-                    text: json["stamp"][i].name,
+            // Akaname
+            for (var i in json["akaname"]) {
+                $('[name="akaname"]').append($('<option>', {
+                    value: json["akaname"][i].value,
+                    text: json["akaname"][i].value + " - " + json["akaname"][i].name,
                 }));
-                $('[name="stampA"]').val(currentProfile["stampA"]);
-
-                $('[name="stampB"]').append($('<option>', {
-                    value: json["stamp"][i].value,
-                    text: json["stamp"][i].name,
-                }));
-                $('[name="stampB"]').val(currentProfile["stampB"]);
-
-                $('[name="stampC"]').append($('<option>', {
-                    value: json["stamp"][i].value,
-                    text: json["stamp"][i].name,
-                }));
-                $('[name="stampC"]').val(currentProfile["stampC"]);
-
-                $('[name="stampD"]').append($('<option>', {
-                    value: json["stamp"][i].value,
-                    text: json["stamp"][i].name,
-                }));
-                $('[name="stampD"]').val(currentProfile["stampD"]);
-
-                $('[name="stampRA"]').append($('<option>', {
-                    value: json["stamp"][i].value,
-                    text: json["stamp"][i].name,
-                }));
-                $('[name="stampRA"]').val(currentProfile["stampRA"]);
-
-                $('[name="stampRB"]').append($('<option>', {
-                    value: json["stamp"][i].value,
-                    text: json["stamp"][i].name,
-                }));
-                $('[name="stampRB"]').val(currentProfile["stampRB"]);
-
-                $('[name="stampRC"]').append($('<option>', {
-                    value: json["stamp"][i].value,
-                    text: json["stamp"][i].name,
-                }));
-                $('[name="stampRC"]').val(currentProfile["stampRC"]);
-
-                $('[name="stampRD"]').append($('<option>', {
-                    value: json["stamp"][i].value,
-                    text: json["stamp"][i].name,
-                }));
-                $('[name="stampRD"]').val(currentProfile["stampRD"]);
-
-                var group = Math.trunc((json["stamp"][i].value - 1) / 4 + 1);
-                var item = json["stamp"][i].value % 4;
-                if (item == 0) item = 4;
-                var image = new Image();
-
-                image.src = "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png";
             }
-        }
-    });
+            $('[name="akaname"]').val(currentProfile["akaname"]);
 
+            var ticketNum = (valgene_ticket !== null) ? valgene_ticket.ticketNum : 0;
+            $('[name="valgeneTicket"]').val(ticketNum);
 
-    if (currentProfile["nemsys"] != 30) {
-        $('#nemsys_pre').attr("src", "static/asset/nemsys/nemsys_" + zeroPad(currentVersion === 7 && currentProfile["nemsys"] === 0 ? 47 : currentProfile["nemsys"], 4) + ".png");
-    } else {
-        $('#nemsys_pre').attr("src", "static/asset/nemsys/nemsys_aprilfool.png");
-    }
-
-    $('#sub_pre').fadeOut(200)
-    $('#sub_pre_vid').fadeOut(200)
-
-    $.getJSON("static/asset/json/data.json", function(json) {
-        database = json
-        let subbgType = database['subbg'].filter((e => e.value === parseInt(currentProfile["subbg"])))[0]['type']
-        let isSubbgSlideshow = (subbgType === 'slideshow')
-
-        if(subbgType === 'video') {
-            $('#sub_pre_vid').empty().append(
-                $("<source id='sub_pre_vid_src' src='static/asset/submonitor_bg/subbg_" + zeroPad(currentProfile["subbg"], 4) + ".mp4'>")
-            )
-            $('#sub_pre_vid').fadeIn(200)
-        } else {
-            $('#sub_pre').attr("src", isSubbgSlideshow ? "static/asset/submonitor_bg/subbg_" + zeroPad(currentProfile["subbg"], 4) + "_0" + (Math.floor(Math.random() * 3) + 1) + getImageFileFormat(0, parseInt(zeroPad($('[name="subbg"]').val(), 4))) : "static/asset/submonitor_bg/subbg_" + zeroPad(currentProfile["subbg"], 4) + getImageFileFormat(0, parseInt(zeroPad(currentProfile["subbg"], 4))));
-            $('#sub_pre').fadeIn(200)
-        }
-    })
-    // console.log(database)
-    $('#custom_0').attr("src", "static/asset/audio/custom_" + zeroPad(currentProfile["bgm"], 2) + "/0.mp3");
-    $('#custom_1').attr("src", "static/asset/audio/custom_" + zeroPad(currentProfile["bgm"], 2) + "/1.mp3");
-    $('#custom_0').prop("volume", 0.5);
-    $('#custom_1').prop("volume", 0.2);
-
-    var stamp = currentProfile["stampA"];
-    if (stamp == 0 || stamp == null) {
-        $('#a_pre').attr("src", "static/asset/nostamp.png");
-    } else {
-        var group = Math.trunc((stamp - 1) / 4 + 1);
-        var item = stamp % 4;
-        if (item == 0) item = 4;
-        $('#a_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-    }
-    stamp = currentProfile["stampB"];
-    if (stamp == 0 || stamp == null) {
-        $('#b_pre').attr("src", "static/asset/nostamp.png");
-    } else {
-        var group = Math.trunc((stamp - 1) / 4 + 1);
-        var item = stamp % 4;
-        if (item == 0) item = 4;
-        $('#b_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-    }
-    stamp = currentProfile["stampC"];
-    if (stamp == 0 || stamp == null) {
-        $('#c_pre').attr("src", "static/asset/nostamp.png");
-    } else {
-        var group = Math.trunc((stamp - 1) / 4 + 1);
-        var item = stamp % 4;
-        if (item == 0) item = 4;
-        $('#c_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-    }
-    stamp = currentProfile["stampD"];
-    if (stamp == 0 || stamp == null) {
-        $('#d_pre').attr("src", "static/asset/nostamp.png");
-    } else {
-        var group = Math.trunc((stamp - 1) / 4 + 1);
-        var item = stamp % 4;
-        if (item == 0) item = 4;
-        $('#d_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-    }
-
-    stamp = currentProfile["stampRA"];
-    if (stamp == 0 || stamp == null) {
-        $('#ra_pre').attr("src", "static/asset/nostamp.png");
-    } else {
-        var group = Math.trunc((stamp - 1) / 4 + 1);
-        var item = stamp % 4;
-        if (item == 0) item = 4;
-        $('#ra_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-    }
-    stamp = currentProfile["stampRB"];
-    if (stamp == 0 || stamp == null) {
-        $('#rb_pre').attr("src", "static/asset/nostamp.png");
-    } else {
-        var group = Math.trunc((stamp - 1) / 4 + 1);
-        var item = stamp % 4;
-        if (item == 0) item = 4;
-        $('#rb_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-    }
-    stamp = currentProfile["stampRC"];
-    if (stamp == 0 || stamp == null) {
-        $('#rc_pre').attr("src", "static/asset/nostamp.png");
-    } else {
-        var group = Math.trunc((stamp - 1) / 4 + 1);
-        var item = stamp % 4;
-        if (item == 0) item = 4;
-        $('#rc_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-    }
-    stamp = currentProfile["stampRD"];
-    if (stamp == 0 || stamp == null) {
-        $('#rd_pre').attr("src", "static/asset/nostamp.png");
-    } else {
-        var group = Math.trunc((stamp - 1) / 4 + 1);
-        var item = stamp % 4;
-        if (item == 0) item = 4;
-        $('#rd_pre').attr("src", "static/asset/chat_stamp/stamp_" + zeroPad(group, 4) + "/stamp_" + zeroPad(group, 4) + "_" + zeroPad(item, 2) + ".png");
-    }
-
-    $('#bgm_pre').append(
-        $('<div class="buttons">').append(
-            $('<button class="button is-primary" type="button" id="play_bgm">')
-            .append("Play")
-            .click(function() {
-                if (play_bgm) {
-                    $('#custom_0').trigger('pause');
-                    $('#play_bgm').animate({ 'opacity': 0 }, 200, function() {
-                        $(this).text('Play').animate({ 'opacity': 1 }, 200);
+            // Stamps — populate all 8 dropdowns, no image preloading
+            for (var i in json["stamp"]) {
+                if (unlock_all || (json["stamp"][i].value === 0 || items_stamp.find(function(x) { return x.id === json["stamp"][i].value; }))) {
+                    stampFields.forEach(function(field) {
+                        $('[name="' + field + '"]').append($('<option>', {
+                            value: json["stamp"][i].value,
+                            text: json["stamp"][i].name,
+                        }));
                     });
-                    play_bgm = false;
-                } else {
-                    $('#custom_0').trigger('play');
-
-                    $('#play_bgm').animate({ 'opacity': 0 }, 200, function() {
-                        $(this).text('Pause').animate({ 'opacity': 1 }, 200);
-                    });
-                    play_bgm = true;
                 }
-            })
-        )
-    )
+            }
 
-    $('#sel_pre').append(
-        $('<div class="buttons">').append(
-            $('<button class="button is-primary" type="button" id="play_sel">')
-            .append("Play")
-            .click(function() {
-                if (play_sel) {
-                    $('#custom_1').trigger('pause');
-                    $('#play_sel').animate({ 'opacity': 0 }, 200, function() {
-                        $(this).text('Play').animate({ 'opacity': 1 }, 200);
-                    });
-                    play_sel = false;
-                } else {
-                    $('#custom_1').trigger('play');
+            // Set stamp dropdown values
+            stampFields.forEach(function(field) {
+                $('[name="' + field + '"]').val(currentProfile[field]);
+            });
 
-                    $('#play_sel').animate({ 'opacity': 0 }, 200, function() {
-                        $(this).text('Pause').animate({ 'opacity': 1 }, 200);
-                    });
-                    play_sel = true;
-                }
-            })
-        )
-    )
+            // Now set initial previews for currently-selected items only
 
-    $('#custom_0').on('ended', function() {
-        $('#custom_0').currentTime = 0;
-        $('#play_bgm').animate({ 'opacity': 0 }, 200, function() {
-            $(this).text('Play').animate({ 'opacity': 1 }, 200);
+            // Nemsys preview
+            $('#nemsys_pre').attr("src", getNemsysSrc(currentProfile["nemsys"], currentVersion));
+
+            // Subbg preview
+            var subbgEntry = json['subbg'].filter(function(e) { return e.value === parseInt(currentProfile["subbg"]); })[0];
+            var subbgType = subbgEntry ? subbgEntry.type : 'normal';
+            $('#sub_pre').hide();
+            $('#sub_pre_vid').hide();
+            if (subbgType === 'video') {
+                $('#sub_pre_vid').empty().append(
+                    $("<source id='sub_pre_vid_src' src='static/asset/submonitor_bg/subbg_" + zeroPad(currentProfile["subbg"], 4) + ".mp4'>")
+                );
+                $('#sub_pre_vid').fadeIn(200);
+            } else {
+                $('#sub_pre').attr("src", getSubbgSrc(currentProfile["subbg"], subbgType));
+                $('#sub_pre').fadeIn(200);
+            }
+
+            // BGM audio (only the selected one)
+            if (currentProfile["bgm"] == 99) {
+                $('#custom_0').attr("src", "static/asset/audio/special_00/0.mp3");
+                $('#custom_1').attr("src", "static/asset/audio/custom_00/1.mp3");
+            } else {
+                $('#custom_0').attr("src", "static/asset/audio/custom_" + zeroPad(currentProfile["bgm"], 2) + "/0.mp3");
+                $('#custom_1').attr("src", "static/asset/audio/custom_" + zeroPad(currentProfile["bgm"], 2) + "/1.mp3");
+            }
+            $('#custom_0').prop("volume", 0.5);
+            $('#custom_1').prop("volume", 0.2);
+
+            // Stamp previews (only the selected ones)
+            stampFields.forEach(function(field) {
+                $(stampPreviews[field]).attr("src", getStampSrc(currentProfile[field]));
+            });
+
+            // Build play buttons for BGM/selection
+            $('#bgm_pre').append(
+                $('<div class="buttons">').append(
+                    $('<button class="button is-primary" type="button" id="play_bgm">')
+                    .append("Play")
+                    .click(function() {
+                        if (play_bgm) {
+                            $('#custom_0').trigger('pause');
+                            $('#play_bgm').animate({ 'opacity': 0 }, 200, function() {
+                                $(this).text('Play').animate({ 'opacity': 1 }, 200);
+                            });
+                            play_bgm = false;
+                        } else {
+                            $('#custom_0').trigger('play');
+                            $('#play_bgm').animate({ 'opacity': 0 }, 200, function() {
+                                $(this).text('Pause').animate({ 'opacity': 1 }, 200);
+                            });
+                            play_bgm = true;
+                        }
+                    })
+                )
+            );
+
+            $('#sel_pre').append(
+                $('<div class="buttons">').append(
+                    $('<button class="button is-primary" type="button" id="play_sel">')
+                    .append("Play")
+                    .click(function() {
+                        if (play_sel) {
+                            $('#custom_1').trigger('pause');
+                            $('#play_sel').animate({ 'opacity': 0 }, 200, function() {
+                                $(this).text('Play').animate({ 'opacity': 1 }, 200);
+                            });
+                            play_sel = false;
+                        } else {
+                            $('#custom_1').trigger('play');
+                            $('#play_sel').animate({ 'opacity': 0 }, 200, function() {
+                                $(this).text('Pause').animate({ 'opacity': 1 }, 200);
+                            });
+                            play_sel = true;
+                        }
+                    })
+                )
+            );
+
+            $('#custom_0').on('ended', function() {
+                this.currentTime = 0;
+                $('#play_bgm').animate({ 'opacity': 0 }, 200, function() {
+                    $(this).text('Play').animate({ 'opacity': 1 }, 200);
+                });
+                play_bgm = false;
+            });
+
+            $('#custom_1').on('ended', function() {
+                this.currentTime = 0;
+                $('#play_sel').animate({ 'opacity': 0 }, 200, function() {
+                    $(this).text('Play').animate({ 'opacity': 1 }, 200);
+                });
+                play_sel = false;
+            });
+
+            $('#custom_0').on('timeupdate', function() {
+                var currentTime = parseInt($('#custom_0').prop('currentTime'));
+                var duration = parseInt($('#custom_0').prop('duration'));
+                var percent = currentTime / duration * 100;
+            });
+
+            $('#custom_1').on('timeupdate', function() {
+                var currentTime = parseInt($('#custom_1').prop('currentTime'));
+                var duration = parseInt($('#custom_1').prop('duration'));
+                var percent = currentTime / duration * 100;
+            });
         });
-
-        play_bgm = false;
     });
-
-    $('#custom_1').on('ended', function() {
-        $('#custom_1').currentTime = 0;
-        $('#play_sel').animate({ 'opacity': 0 }, 200, function() {
-            $(this).text('Play').animate({ 'opacity': 1 }, 200);
-        });
-        play_sel = false;
-    });
-
-    $('#custom_0').on('timeupdate', function() {
-        var currentTime = parseInt($('#custom_0').prop('currentTime'));
-        var duration = parseInt($('#custom_0').prop('duration'));
-        var percent = currentTime / duration * 100;
-
-    });
-
-    $('#custom_1').on('timeupdate', function() {
-        var currentTime = parseInt($('#custom_1').prop('currentTime'));
-        var duration = parseInt($('#custom_1').prop('duration'));
-        var percent = currentTime / duration * 100;
-
 
     $('#version_select').change(function() {
-        const urlParams = new URLSearchParams(location.search);
+        var urlParams = new URLSearchParams(location.search);
         urlParams.set('version', $('#version_select').val());
         location.search = urlParams;
     });
-
-    });
-})
+});

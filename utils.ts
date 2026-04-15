@@ -80,21 +80,24 @@ export function invalidateMusicDbCache() {
 
 // Game crashes with music IDs >= 3072 (internal array limit in soundvoltex.dll)
 // Official songs go up to ~1854, so custom charts use 2800-3071 (271 slots)
-const NAUTICA_ID_START = 2800;
+export const NAUTICA_ID_START = 2800;
+export const NAUTICA_ID_END = 3071;
 
 export async function GetNextNauticaId(): Promise<number> {
-  const existing = await DB.FindOne<Counter>({ collection: 'counter', key: 'nautica_music_id' });
-  let nextValue: number;
-  if (!existing || existing.value < NAUTICA_ID_START) {
-    nextValue = NAUTICA_ID_START;
-  } else {
-    nextValue = existing.value + 1;
+  const songs = await DB.Find<any>({ collection: 'nautica_song', mid: { $gte: NAUTICA_ID_START } });
+  const usedIds = new Set((songs || []).map((s: any) => s.mid));
+
+  for (let id = NAUTICA_ID_START; id <= NAUTICA_ID_END; id++) {
+    if (!usedIds.has(id)) {
+      await DB.Upsert<Counter>(
+        { collection: 'counter', key: 'nautica_music_id' },
+        { $set: { value: id } }
+      );
+      return id;
+    }
   }
-  await DB.Upsert<Counter>(
-    { collection: 'counter', key: 'nautica_music_id' },
-    { $set: { value: nextValue } }
-  );
-  return nextValue;
+
+  throw new Error(`No available music ID slots (all ${NAUTICA_ID_START}-${NAUTICA_ID_END} in use)`);
 }
 
 export function computeForce(diff, score, medal, grade) {
