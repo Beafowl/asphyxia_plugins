@@ -106,7 +106,7 @@ function renderNominationResults(songs) {
             charts: charts.map(function (c) { return { difficulty: c.difficulty, level: c.level, effector: c.effector || '' }; }),
             tags: tags,
           })) + '\'>' +
-          '<span class="icon"><i class="mdi mdi-star-plus"></i></span>' +
+          '<span class="icon is-small"><i class="mdi mdi-star"></i></span>' +
           '<span>Nominate</span>' +
         '</button>' +
       '</div>' +
