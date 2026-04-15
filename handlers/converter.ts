@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as https from 'https';
 import * as os from 'os';
 import { execSync } from 'child_process';
+import * as iconv from 'iconv-lite';
 import { NauticaSong } from '../models/nautica_song';
 import { GetNextNauticaId, invalidateMusicDbCache } from '../utils';
 
@@ -93,10 +94,13 @@ async function doConversion(song: NauticaSong): Promise<void> {
     });
     console.log(`[Nautica] VoxCharger output:\n${output}`);
 
-    // Step 5: Update custom_music_db.json for asphyxia score tracking
+    // Step 5: Fix VoxCharger XML output (garbled encoding + leading zeros)
+    patchMergedXml(song, gameRoot, mixName);
+
+    // Step 6: Update custom_music_db.json for asphyxia score tracking
     updateCustomMusicDb(song);
 
-    // Step 6: Invalidate cache
+    // Step 7: Invalidate cache
     invalidateMusicDbCache();
 
   } finally {
@@ -199,4 +203,55 @@ function updateCustomMusicDb(song: NauticaSong): void {
 function formatDate(): string {
   const d = new Date();
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function toShiftJIS(utf8str: string): string {
+  const encoded = iconv.encode(utf8str, 'Shift_JIS');
+  return encoded.toString('binary');
+}
+
+function escapeXml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function patchMergedXml(song: NauticaSong, gameRoot: string, mixName: string): void {
+  try {
+    const xmlPath = path.join(gameRoot, 'data_mods', mixName, 'others', 'music_db.merged.xml');
+    if (!fs.existsSync(xmlPath)) return;
+
+    let xml = fs.readFileSync(xmlPath, 'binary');
+
+    const idStr = String(song.mid);
+    const entryStart = xml.indexOf(`music id="${idStr}"`);
+    if (entryStart === -1) return;
+    const entryEnd = xml.indexOf('</music>', entryStart);
+    if (entryEnd === -1) return;
+
+    let entry = xml.slice(entryStart, entryEnd + 8);
+
+    // Fix title and artist with correct text from ksm.dev (convert UTF-8 to Shift-JIS)
+    const sjisTitle = toShiftJIS(escapeXml(song.title));
+    const sjisArtist = toShiftJIS(escapeXml(song.artist));
+
+    entry = entry.replace(/<title_name>[^<]*<\/title_name>/, `<title_name>${sjisTitle}</title_name>`);
+    entry = entry.replace(/<artist_name>[^<]*<\/artist_name>/, `<artist_name>${sjisArtist}</artist_name>`);
+
+    // Fix yomigana with safe placeholder (Shift-JIS for ダミー)
+    const sjisDummy = '\x83\x5F\x83\x7E\x81\x5B';
+    entry = entry.replace(/<title_yomigana>[^<]*<\/title_yomigana>/, `<title_yomigana>${sjisDummy}</title_yomigana>`);
+    entry = entry.replace(/<artist_yomigana>[^<]*<\/artist_yomigana>/, `<artist_yomigana>${sjisDummy}</artist_yomigana>`);
+
+    // Fix leading zeros in typed numeric values
+    entry = entry.replace(/__type="(u\d+|s\d+)">0+(\d)/g, '__type="$1">$2');
+
+    // Fix empty illustrator tags
+    entry = entry.replace(/<illustrator><\/illustrator>/g, '<illustrator>-</illustrator>');
+
+    xml = xml.slice(0, entryStart) + entry + xml.slice(entryEnd + 8);
+    fs.writeFileSync(xmlPath, xml, 'binary');
+
+    console.log(`[Nautica] Patched XML for ${song.title} (ID ${song.mid})`);
+  } catch (err: any) {
+    console.error(`[Nautica] Failed to patch XML: ${err.message}`);
+  }
 }

@@ -1,8 +1,20 @@
 var currentPage = 1;
 var totalPages = 1;
+var existingNauticaIds = new Set();
+var adminPreviewAudio = null;
 
 var diffNames = ['', 'NOV', 'ADV', 'EXH', 'MXM'];
 var diffClasses = ['', 'chip-nov', 'chip-adv', 'chip-exh', 'chip-mxm'];
+
+function loadExistingIds() {
+  emit('nauticaList', {}).then(function (response) {
+    var result = response.data;
+    if (result && result.songs) {
+      existingNauticaIds = new Set(result.songs.map(function (s) { return s.nauticaId; }));
+    }
+  });
+}
+loadExistingIds();
 
 // ─── Nautica Browse (Direct Approve) ────────────────────────────────────────
 
@@ -36,7 +48,8 @@ function browseNautica(page) {
     currentPage = meta.current_page || page;
     totalPages = meta.last_page || 1;
 
-    renderNauticaResults(songs);
+    var filtered = songs.filter(function (s) { return !existingNauticaIds.has(s.id); });
+    renderNauticaResults(filtered);
     renderPagination();
   });
 }
@@ -81,6 +94,10 @@ function renderNauticaResults(songs) {
         tagHtml +
       '</div>' +
       '<div class="actions">' +
+        (s.preview_url ?
+          '<button class="button is-small is-info admin-preview-btn" data-url="' + escapeAttr(s.preview_url) + '">' +
+            '<span class="icon"><i class="mdi mdi-play"></i></span>' +
+          '</button> ' : '') +
         '<button class="button is-small is-success nautica-approve-btn" ' +
           'data-nautica=\'' + escapeAttr(JSON.stringify({
             nauticaId: s.id,
@@ -104,6 +121,37 @@ function renderNauticaResults(songs) {
   for (var k = 0; k < btns.length; k++) {
     btns[k].addEventListener('click', handleApprove);
   }
+
+  var previewBtns = container.querySelectorAll('.admin-preview-btn');
+  for (var p = 0; p < previewBtns.length; p++) {
+    previewBtns[p].addEventListener('click', handleAdminPreview);
+  }
+}
+
+function handleAdminPreview(e) {
+  var btn = e.currentTarget;
+  var url = btn.getAttribute('data-url');
+  var icon = btn.querySelector('i');
+
+  if (adminPreviewAudio && !adminPreviewAudio.paused) {
+    adminPreviewAudio.pause();
+    adminPreviewAudio = null;
+    var allBtns = document.querySelectorAll('.admin-preview-btn i');
+    for (var i = 0; i < allBtns.length; i++) {
+      allBtns[i].className = 'mdi mdi-play';
+    }
+    if (btn._playing) { btn._playing = false; return; }
+  }
+
+  adminPreviewAudio = new Audio(url);
+  adminPreviewAudio.volume = 0.5;
+  adminPreviewAudio.play();
+  icon.className = 'mdi mdi-stop';
+  btn._playing = true;
+  adminPreviewAudio.addEventListener('ended', function () {
+    icon.className = 'mdi mdi-play';
+    btn._playing = false;
+  });
 }
 
 function handleApprove(e) {
@@ -123,6 +171,7 @@ function handleApprove(e) {
       btn.classList.remove('is-success');
       btn.classList.add('is-info');
       btn.innerHTML = '<span class="icon"><i class="mdi mdi-check-all"></i></span><span>Approved — converting...</span>';
+      loadExistingIds();
       refreshCuratedList();
       refreshNominationQueue();
     }

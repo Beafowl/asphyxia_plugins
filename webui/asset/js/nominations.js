@@ -3,9 +3,22 @@
 var nomPage = 1;
 var nomTotalPages = 1;
 var nomDebounce = null;
+var existingNauticaIds = new Set();
+var nomPreviewAudio = null;
 
 var diffNames = ['', 'NOV', 'ADV', 'EXH', 'MXM'];
 var diffClasses = ['', 'chip-nov', 'chip-adv', 'chip-exh', 'chip-mxm'];
+
+// Load all existing nautica song IDs so we can hide them from search
+function loadExistingIds() {
+  emit('nauticaList', {}).then(function (response) {
+    var result = response.data;
+    if (result && result.songs) {
+      existingNauticaIds = new Set(result.songs.map(function (s) { return s.nauticaId; }));
+    }
+  });
+}
+loadExistingIds();
 
 document.getElementById('nominate-search').addEventListener('input', function () {
   clearTimeout(nomDebounce);
@@ -37,7 +50,8 @@ function browseForNomination(page) {
     nomPage = meta.current_page || page;
     nomTotalPages = meta.last_page || 1;
 
-    renderNominationResults(songs);
+    var filtered = songs.filter(function (s) { return !existingNauticaIds.has(s.id); });
+    renderNominationResults(filtered);
     renderNomPagination();
   });
 }
@@ -78,6 +92,10 @@ function renderNominationResults(songs) {
         '<div class="charts">' + chipHtml + '</div>' +
       '</div>' +
       '<div class="actions">' +
+        (s.preview_url ?
+          '<button class="button is-small is-info nom-preview-btn" data-url="' + escapeAttr(s.preview_url) + '">' +
+            '<span class="icon"><i class="mdi mdi-play"></i></span>' +
+          '</button> ' : '') +
         '<button class="button is-small is-warning nominate-btn" ' +
           'data-song=\'' + escapeAttr(JSON.stringify({
             nauticaId: s.id,
@@ -101,6 +119,38 @@ function renderNominationResults(songs) {
   for (var k = 0; k < btns.length; k++) {
     btns[k].addEventListener('click', handleNominate);
   }
+
+  var previewBtns = container.querySelectorAll('.nom-preview-btn');
+  for (var p = 0; p < previewBtns.length; p++) {
+    previewBtns[p].addEventListener('click', handleNomPreview);
+  }
+}
+
+function handleNomPreview(e) {
+  var btn = e.currentTarget;
+  var url = btn.getAttribute('data-url');
+  var icon = btn.querySelector('i');
+
+  if (nomPreviewAudio && !nomPreviewAudio.paused) {
+    nomPreviewAudio.pause();
+    nomPreviewAudio = null;
+    // Reset all preview buttons
+    var allBtns = document.querySelectorAll('.nom-preview-btn i');
+    for (var i = 0; i < allBtns.length; i++) {
+      allBtns[i].className = 'mdi mdi-play';
+    }
+    if (btn._playing) { btn._playing = false; return; }
+  }
+
+  nomPreviewAudio = new Audio(url);
+  nomPreviewAudio.volume = 0.5;
+  nomPreviewAudio.play();
+  icon.className = 'mdi mdi-stop';
+  btn._playing = true;
+  nomPreviewAudio.addEventListener('ended', function () {
+    icon.className = 'mdi mdi-play';
+    btn._playing = false;
+  });
 }
 
 function handleNominate(e) {
@@ -126,6 +176,7 @@ function handleNominate(e) {
       btn.classList.remove('is-warning');
       btn.classList.add('is-success');
       btn.innerHTML = '<span class="icon"><i class="mdi mdi-check"></i></span><span>Nominated!</span>';
+      loadExistingIds();
       loadMyNominations();
     }
   });

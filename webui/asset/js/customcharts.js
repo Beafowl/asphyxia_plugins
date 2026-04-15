@@ -1,5 +1,6 @@
 var diffNames = ['', 'NOV', 'ADV', 'EXH', 'MXM'];
 var diffClasses = ['', 'chip-nov', 'chip-adv', 'chip-exh', 'chip-mxm'];
+var chartPreviewAudio = null;
 
 function loadCustomCharts() {
   emit('nauticaList', {}).then(function (response) {
@@ -44,6 +45,9 @@ function loadCustomCharts() {
           '<div class="id-badge">ID: ' + s.mid + '</div>' +
         '</div>' +
         '<div class="actions">' +
+          '<button class="button is-small is-info chart-preview-btn" data-id="' + s.nauticaId + '">' +
+            '<span class="icon"><i class="mdi mdi-play"></i></span>' +
+          '</button> ' +
           '<a class="button is-small is-link" href="/api/nautica/download/' + s.mid + '" target="_blank">' +
             '<span class="icon"><i class="mdi mdi-download"></i></span>' +
             '<span>Download</span>' +
@@ -54,6 +58,38 @@ function loadCustomCharts() {
 
     html += '</div>';
     container.innerHTML = html;
+
+    var previewBtns = container.querySelectorAll('.chart-preview-btn');
+    for (var k = 0; k < previewBtns.length; k++) {
+      previewBtns[k].addEventListener('click', handleChartPreview);
+    }
+  });
+}
+
+function handleChartPreview(e) {
+  var btn = e.currentTarget;
+  var nauticaId = btn.getAttribute('data-id');
+  var url = 'https://near.sfo2.cdn.digitaloceanspaces.com/ksm.dev/songs/' + nauticaId + '/preview.mp3';
+  var icon = btn.querySelector('i');
+
+  if (chartPreviewAudio && !chartPreviewAudio.paused) {
+    chartPreviewAudio.pause();
+    chartPreviewAudio = null;
+    var allBtns = document.querySelectorAll('.chart-preview-btn i');
+    for (var i = 0; i < allBtns.length; i++) {
+      allBtns[i].className = 'mdi mdi-play';
+    }
+    if (btn._playing) { btn._playing = false; return; }
+  }
+
+  chartPreviewAudio = new Audio(url);
+  chartPreviewAudio.volume = 0.5;
+  chartPreviewAudio.play();
+  icon.className = 'mdi mdi-stop';
+  btn._playing = true;
+  chartPreviewAudio.addEventListener('ended', function () {
+    icon.className = 'mdi mdi-play';
+    btn._playing = false;
   });
 }
 

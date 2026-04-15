@@ -393,6 +393,8 @@ export const nauticaRemove = async (data: { nauticaId: string }, send: WebUISend
       const gameRoot = U.GetConfig('sdvx_eg_root_dir');
       const mixName = U.GetConfig('sdvx_custom_mix_name') || 'asphyxia_custom';
       if (gameRoot) {
+        removeFromMergedXml(song.mid, gameRoot, mixName);
+
         const idStr = String(song.mid).padStart(4, '0');
         const musicDir = path.join(gameRoot, 'data_mods', mixName, 'music', `${idStr}_nautica`);
         if (fs.existsSync(musicDir)) {
@@ -508,5 +510,18 @@ function removeFromCustomMusicDb(musicId: number) {
     if (!data?.mdb?.music) return;
     data.mdb.music = data.mdb.music.filter((s: any) => String(s.id) !== String(musicId));
     fs.writeFileSync(customDbPath, JSON.stringify(data, null, 2), 'utf8');
+  } catch {}
+}
+
+function removeFromMergedXml(musicId: number, gameRoot: string, mixName: string) {
+  try {
+    const xmlPath = path.join(gameRoot, 'data_mods', mixName, 'others', 'music_db.merged.xml');
+    if (!fs.existsSync(xmlPath)) return;
+    let xml = fs.readFileSync(xmlPath, 'binary');
+    const pattern = new RegExp(`\\s*<music id="${musicId}">[\\s\\S]*?</music>`, 'g');
+    const updated = xml.replace(pattern, '');
+    if (updated !== xml) {
+      fs.writeFileSync(xmlPath, updated, 'binary');
+    }
   } catch {}
 }
