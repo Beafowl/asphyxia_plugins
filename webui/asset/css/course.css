@@ -1,31 +1,30 @@
 @font-face {
-    font-family: testfont;
-    src: url("font/0001.ttf");
+  font-family: testfont;
+  src: url('font/0001.ttf');
 }
 
 @font-face {
-    font-family: ffff;
-    src: url("font/0002.ttf");
+  font-family: ffff;
+  src: url('font/0002.ttf');
 }
 
 table.is-borderless td {
-    border: 0px solid #00000000
+  border: 0px solid #00000000;
 }
 
 table.is-center td {
-    text-align: center;
-    justify-content: center;
+  text-align: center;
+  justify-content: center;
 }
-
 
 /* .course-content {
     padding: 0 30%;
 } */
 
 @media screen and (min-width: 1000px) {
-    .card.is-inlineblocked {
-        display: inline-block;
-        width: 45%;
-        margin: 1em 2%
-    }
+  .card.is-inlineblocked {
+    display: inline-block;
+    width: 45%;
+    margin: 1em 2%;
+  }
 }

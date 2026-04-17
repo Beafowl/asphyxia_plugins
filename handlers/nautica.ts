@@ -4,9 +4,11 @@ import * as path from 'path';
 import archiver from 'archiver';
 import { NauticaSong } from '../models/nautica_song';
 import { NominationFeedback } from '../models/nomination_feedback';
+import { DeletedNauticaSong } from '../models/deleted_nautica_song';
 import { MusicRecord } from '../models/music_record';
 import { invalidateMusicDbCache } from '../utils';
 import { convertNauticaSong } from './converter';
+import { deleteDriveFile } from './drive';
 import { WebUISend } from '../../../src/eamuse/EamusePlugin';
 
 function nauticaGet(urlPath: string): Promise<any> {
@@ -376,10 +378,75 @@ export const nauticaList = async (data: any, send: WebUISend) => {
   }
 };
 
-export const nauticaRemove = async (data: { nauticaId: string }, send: WebUISend) => {
+export const nauticaDeletedList = async (data: any, send: WebUISend) => {
   try {
+    const deleted = await DB.Find<DeletedNauticaSong>({ collection: 'deleted_nautica_song' });
+    const rejected = await DB.Find<NauticaSong>({ collection: 'nautica_song', status: 'rejected' });
+
+    const deletedItems = (deleted || []).map((r: any) => ({
+      nauticaId: r.nauticaId,
+      title: r.title,
+      artist: r.artist,
+      jacketUrl: r.jacketUrl,
+      mid: r.mid || 0,
+      previousStatus: r.previousStatus || '',
+      deletedReason: r.deletedReason || '',
+      deletedBy: r.deletedBy || '',
+      deletedAt: r.deletedAt || 0,
+      source: 'deleted',
+    }));
+
+    const rejectedItems = (rejected || []).map((r: any) => ({
+      nauticaId: r.nauticaId,
+      title: r.title,
+      artist: r.artist,
+      jacketUrl: r.jacketUrl,
+      mid: r.mid || 0,
+      previousStatus: 'rejected',
+      deletedReason: r.rejectedReason || 'No reason given',
+      deletedBy: r.rejectedBy || '',
+      deletedAt: r.rejectedAt || 0,
+      source: 'rejected',
+    }));
+
+    const all = [...deletedItems, ...rejectedItems];
+    all.sort((a: any, b: any) => (b.deletedAt || 0) - (a.deletedAt || 0));
+    send.json({ success: true, deleted: all });
+  } catch (err: any) {
+    send.json({ error: err.message || 'Failed to list deleted charts' });
+  }
+};
+
+export const nauticaRemove = async (data: { nauticaId: string; reason?: string; __username?: string }, send: WebUISend) => {
+  try {
+    const reason = data.reason ? String(data.reason).trim().substring(0, 500) : '';
+    if (!reason) { send.json({ error: 'A deletion reason is required' }); return; }
+
     const song = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: data.nauticaId });
     if (!song) { send.json({ error: 'Song not found' }); return; }
+
+    const auditRecord: DeletedNauticaSong = {
+      collection: 'deleted_nautica_song',
+      nauticaId: song.nauticaId,
+      title: song.title || '',
+      artist: song.artist || '',
+      jacketUrl: song.jacketUrl || '',
+      mid: song.mid || 0,
+      previousStatus: song.status,
+      deletedReason: reason,
+      deletedBy: data.__username || 'admin',
+      deletedAt: Date.now(),
+    };
+    await DB.Upsert<DeletedNauticaSong>(
+      { collection: 'deleted_nautica_song', nauticaId: song.nauticaId },
+      { $set: auditRecord }
+    );
+
+    if (song.driveFileId) {
+      deleteDriveFile(song.driveFileId).catch((err: any) => {
+        console.error(`[Nautica] Drive delete failed for ${song.title}: ${err.message}`);
+      });
+    }
 
     await DB.Remove<NauticaSong>({ collection: 'nautica_song', nauticaId: data.nauticaId });
     await DB.Remove<NominationFeedback>({ collection: 'nomination_feedback', nauticaId: data.nauticaId });
@@ -411,6 +478,29 @@ export const nauticaRemove = async (data: { nauticaId: string }, send: WebUISend
     send.json({ success: true });
   } catch (err: any) {
     send.json({ error: err.message || 'Failed to remove song' });
+  }
+};
+
+export const nauticaReconvertAll = async (data: any, send: WebUISend) => {
+  try {
+    const allSongs = await DB.Find<NauticaSong>({ collection: 'nautica_song' });
+    const toReconvert = (allSongs || []).filter(
+      (s: any) => s.mid && s.mid > 0 && (s.status === 'ready' || s.status === 'error')
+    );
+
+    for (const song of toReconvert) {
+      await DB.Update<NauticaSong>(
+        { collection: 'nautica_song', nauticaId: song.nauticaId },
+        { $set: { status: 'pending' as const, errorMessage: '' } }
+      );
+      convertNauticaSong(song as any).catch((err) => {
+        console.error(`[Nautica] Reconversion failed for ${song.title}: ${err.message}`);
+      });
+    }
+
+    send.json({ success: true, count: toReconvert.length });
+  } catch (err: any) {
+    send.json({ error: err.message || 'Failed to queue reconversion' });
   }
 };
 

@@ -6,6 +6,7 @@ import { execSync } from 'child_process';
 import * as iconv from 'iconv-lite';
 import { NauticaSong } from '../models/nautica_song';
 import { GetNextNauticaId, invalidateMusicDbCache } from '../utils';
+import { uploadSongZip, isDriveEnabled } from './drive';
 
 // Conversion queue to avoid parallel CPU-heavy operations
 let conversionQueue: NauticaSong[] = [];
@@ -37,6 +38,35 @@ async function processQueue() {
         { $set: { status: 'ready' as const, convertedAt: Date.now() } }
       );
       console.log(`[Nautica] Converted: ${song.title} (ID ${song.mid})`);
+
+      if (isDriveEnabled()) {
+        const latest = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: song.nauticaId });
+        if (latest) {
+          console.log(`[Nautica] Uploading to Drive: ${latest.title} (ID ${latest.mid})...`);
+          const startedAt = Date.now();
+          uploadSongZip(latest).then(async (result) => {
+            if (!result) {
+              console.log(`[Nautica] Drive upload skipped for ${latest.title} (no zip produced — check Drive config / game directory).`);
+              return;
+            }
+            await DB.Update<NauticaSong>(
+              { collection: 'nautica_song', nauticaId: latest.nauticaId },
+              { $set: {
+                driveFileId: result.fileId,
+                driveFileSize: result.size,
+                driveUploadedAt: Date.now(),
+              }}
+            );
+            const mb = (result.size / (1024 * 1024)).toFixed(2);
+            const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+            const viewUrl = `https://drive.google.com/file/d/${result.fileId}/view`;
+            console.log(`[Nautica] Uploaded to Drive: ${latest.title} (ID ${latest.mid}) — ${mb} MB in ${secs}s`);
+            console.log(`[Nautica]   \u2192 ${viewUrl}`);
+          }).catch((err: any) => {
+            console.error(`[Nautica] Drive upload failed for ${latest.title}: ${err.message}`);
+          });
+        }
+      }
     } catch (err: any) {
       console.error(`[Nautica] Conversion error for ${song.title}: ${err.message}`);
       await DB.Update<NauticaSong>(

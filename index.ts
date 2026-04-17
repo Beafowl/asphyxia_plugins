@@ -30,7 +30,9 @@ import {
   nauticaApprove,
   nauticaRemove,
   nauticaList,
+  nauticaDeletedList,
   nauticaConvertStatus,
+  nauticaReconvertAll,
   nauticaDownloadSong,
   nauticaDownloadAll,
   nauticaNominate,
@@ -62,6 +64,11 @@ export function register() {
   R.Config('sdvx_voxcharger_path', { type: 'string', needRestart: false, default: '', name: 'VoxCharger Path', desc: 'Path to VoxCharger.exe for converting custom charts'});
   R.Config('sdvx_custom_mix_name', { type: 'string', needRestart: false, default: 'asphyxia_custom', name: 'Custom Mix Name', desc: 'Folder name under data_mods/ for curated custom charts'});
   R.Config('sdvx_nomination_mode', { type: 'string', options: ['production', 'staging'], default: 'production', name: 'Nomination Mode', desc: 'On staging servers, charts moved to testing are auto-converted for playtesting'});
+  R.Config('sdvx_drive_enabled', { type: 'boolean', needRestart: false, default: false, name: 'Google Drive Uploads', desc: 'When enabled, converted charts are uploaded to Google Drive and clients download from there instead of this server.'});
+  R.Config('sdvx_drive_oauth_client_id', { type: 'string', needRestart: false, default: '', name: 'Drive OAuth Client ID', desc: 'OAuth 2.0 Client ID from GCP Console > APIs & Services > Credentials. Create a Web application client and add http://localhost:8083/api/drive-oauth-callback (matching your server URL) as an Authorized redirect URI.'});
+  R.Config('sdvx_drive_oauth_client_secret', { type: 'string', needRestart: false, default: '', name: 'Drive OAuth Client Secret', desc: 'OAuth 2.0 Client Secret that pairs with the Client ID above.'});
+  R.Config('sdvx_drive_oauth_refresh_token', { type: 'string', needRestart: false, default: '', name: 'Drive OAuth Refresh Token', desc: 'Populated automatically after you click "Authorize with Google Drive" on the Custom Charts Admin page. Leave empty.'});
+  R.Config('sdvx_drive_folder_id', { type: 'string', needRestart: false, default: '', name: 'Drive Folder ID', desc: 'The target Google Drive folder ID (the last segment of the folder URL). Uploads go into this folder under your own Google account, counting against your personal Drive quota.'});
 
   R.WebUIEvent('copyResourcesFromGame', copyResourcesFromGame);
   R.WebUIEvent('getRivalScores', getRivalScores);
@@ -78,7 +85,9 @@ export function register() {
   R.WebUIEvent('nauticaApprove', nauticaApprove);
   R.WebUIEvent('nauticaRemove', nauticaRemove);
   R.WebUIEvent('nauticaList', nauticaList);
+  R.WebUIEvent('nauticaDeletedList', nauticaDeletedList);
   R.WebUIEvent('nauticaConvertStatus', nauticaConvertStatus);
+  R.WebUIEvent('nauticaReconvertAll', nauticaReconvertAll);
   R.WebUIEvent('nauticaDownloadSong', nauticaDownloadSong);
   R.WebUIEvent('nauticaDownloadAll', nauticaDownloadAll);
   R.WebUIEvent('nauticaNominate', nauticaNominate);

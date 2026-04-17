@@ -9,6 +9,19 @@ div
           i.mdi.mdi-clipboard-check
         | Nominations Queue
     .card-content
+      .buttons.are-small.mb-3#nominations-bulk-actions
+        button.button.is-info#bulk-test-btn
+          span.icon
+            i.mdi.mdi-test-tube
+          span Test All
+        button.button.is-success#bulk-approve-btn
+          span.icon
+            i.mdi.mdi-check-all
+          span Approve All
+        button.button.is-danger#bulk-reject-btn
+          span.icon
+            i.mdi.mdi-close-thick
+          span Reject All
       #nominations-queue
         p.has-text-grey Loading nominations...
 
@@ -61,7 +74,42 @@ div
           i.mdi.mdi-check-all
         | Curated Charts
     .card-content
+      .buttons.are-small.mb-3
+        button.button.is-warning#bulk-reconvert-btn(title="Re-run VoxCharger on every ready/error chart. Re-downloads source ZIPs and overwrites converted files.")
+          span.icon
+            i.mdi.mdi-refresh
+          span Reconvert All (VoxCharger)
       #curated-list
         p.has-text-grey Loading curated charts...
+
+  .card.mt-5
+    .card-header
+      p.card-header-title
+        span.icon
+          i.mdi.mdi-google-drive
+        | Google Drive Integration
+    .card-content
+      p.mb-3 Authorize this server to upload converted charts to your Google Drive. Converted chart zips will be stored in the configured Drive folder and served directly from Google's CDN, bypassing your upload bandwidth.
+      p.help.mb-3
+        | Before clicking: set the OAuth Client ID, Client Secret, and Drive Folder ID in the plugin settings. The OAuth client must have
+        | #[code http://localhost:8083/api/drive-oauth-callback] (or your actual server URL) as an Authorized redirect URI.
+      a.button.is-link(href="/api/drive-oauth-start" target="_blank")
+        span.icon
+          i.mdi.mdi-login
+        span Authorize with Google Drive
+
+  .card.mt-5
+    .card-header
+      p.card-header-title
+        span.icon
+          i.mdi.mdi-delete-clock
+        | Deleted Charts
+    .card-content
+      p.help
+        span.icon.is-small(style="vertical-align:middle")
+          i.mdi.mdi-information-outline
+        |  Deleted charts are excluded from the Nautica browse results above so they don't reappear.
+      #deleted-list
+        p.has-text-grey Loading deleted charts...
 
 script(src="static/asset/js/nautica.js")

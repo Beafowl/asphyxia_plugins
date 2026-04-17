@@ -7,11 +7,20 @@ var diffNames = ['', 'NOV', 'ADV', 'EXH', 'MXM'];
 var diffClasses = ['', 'chip-nov', 'chip-adv', 'chip-exh', 'chip-mxm'];
 
 function loadExistingIds() {
-  emit('nauticaList', {}).then(function (response) {
-    var result = response.data;
-    if (result && result.songs) {
-      existingNauticaIds = new Set(result.songs.map(function (s) { return s.nauticaId; }));
+  Promise.all([
+    emit('nauticaList', {}),
+    emit('nauticaDeletedList', {}),
+  ]).then(function (responses) {
+    var ids = new Set();
+    var listResult = responses[0] && responses[0].data;
+    if (listResult && listResult.songs) {
+      listResult.songs.forEach(function (s) { ids.add(s.nauticaId); });
     }
+    var deletedResult = responses[1] && responses[1].data;
+    if (deletedResult && deletedResult.deleted) {
+      deletedResult.deleted.forEach(function (d) { ids.add(d.nauticaId); });
+    }
+    existingNauticaIds = ids;
   });
 }
 loadExistingIds();
@@ -338,6 +347,133 @@ function handleNominationAction(e) {
   }
 }
 
+// ─── Bulk Nomination Actions ────────────────────────────────────────────────
+
+function handleBulkNominationAction(action) {
+  emit('nauticaNominationQueue', {}).then(function (response) {
+    var result = response.data;
+    if (!result || !result.nominations) {
+      alert((result && result.error) || 'Failed to load nominations.');
+      return;
+    }
+
+    var queue = result.nominations || [];
+    var targets = action === 'testing'
+      ? queue.filter(function (n) { return n.status === 'nominated'; })
+      : queue;
+
+    if (targets.length === 0) {
+      alert('No charts to ' + (action === 'testing' ? 'test' : action) + '.');
+      return;
+    }
+
+    var sharedReason = null;
+    if (action === 'reject') {
+      sharedReason = prompt('Reason for rejecting ' + targets.length + ' chart(s) (required):');
+      if (sharedReason === null) return;
+      sharedReason = sharedReason.trim();
+      if (!sharedReason) { alert('A rejection reason is required.'); return; }
+    }
+
+    var verb = action === 'testing' ? 'move to testing' : action;
+    if (!confirm('Are you sure you want to ' + verb + ' ' + targets.length + ' chart(s)?')) return;
+
+    setBulkButtonsDisabled(true);
+
+    var ok = 0, failed = 0, idx = 0;
+    function next() {
+      if (idx >= targets.length) {
+        setBulkButtonsDisabled(false);
+        if (failed > 0) alert('Done: ' + ok + ' succeeded, ' + failed + ' failed.');
+        loadExistingIds();
+        refreshNominationQueue();
+        refreshCuratedList();
+        refreshDeletedList();
+        return;
+      }
+      var n = targets[idx++];
+      var call;
+      if (action === 'testing') {
+        call = emit('nauticaSetTesting', { nauticaId: n.nauticaId });
+      } else if (action === 'approve') {
+        call = emit('nauticaApprove', {
+          nauticaId: n.nauticaId,
+          title: n.title,
+          artist: n.artist,
+          jacketUrl: n.jacketUrl,
+          downloadUrl: n.downloadUrl,
+          charts: n.charts,
+          tags: n.tags,
+        });
+      } else {
+        call = emit('nauticaReject', { nauticaId: n.nauticaId, reason: sharedReason });
+      }
+      call.then(function (resp) {
+        var r = resp && resp.data;
+        if (r && r.error) failed++; else ok++;
+        next();
+      }).catch(function () { failed++; next(); });
+    }
+    next();
+  });
+}
+
+function setBulkButtonsDisabled(disabled) {
+  var ids = ['bulk-test-btn', 'bulk-approve-btn', 'bulk-reject-btn'];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
+    if (el) {
+      el.disabled = disabled;
+      if (disabled) el.classList.add('is-loading');
+      else el.classList.remove('is-loading');
+    }
+  }
+}
+
+(function () {
+  var testBtn = document.getElementById('bulk-test-btn');
+  var approveBtn = document.getElementById('bulk-approve-btn');
+  var rejectBtn = document.getElementById('bulk-reject-btn');
+  if (testBtn) testBtn.addEventListener('click', function () { handleBulkNominationAction('testing'); });
+  if (approveBtn) approveBtn.addEventListener('click', function () { handleBulkNominationAction('approve'); });
+  if (rejectBtn) rejectBtn.addEventListener('click', function () { handleBulkNominationAction('reject'); });
+})();
+
+// ─── Reconvert All ──────────────────────────────────────────────────────────
+
+(function () {
+  var btn = document.getElementById('bulk-reconvert-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    if (!confirm('Re-run VoxCharger on every converted chart? This re-downloads source ZIPs from Nautica and overwrites existing converted files. It may take a while.')) return;
+
+    btn.disabled = true;
+    btn.classList.add('is-loading');
+
+    emit('nauticaReconvertAll', {}).then(function (response) {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+
+      var result = response && response.data;
+      if (!result || result.error) {
+        alert((result && result.error) || 'Failed to queue reconversion.');
+        return;
+      }
+
+      if (result.count === 0) {
+        alert('No charts to reconvert.');
+      } else {
+        alert('Queued ' + result.count + ' chart(s) for reconversion. Watch the Curated Charts list for status updates.');
+      }
+      refreshCuratedList();
+    }).catch(function () {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+      alert('Failed to queue reconversion.');
+    });
+  });
+})();
+
 // ─── Curated Charts List ────────────────────────────────────────────────────
 
 function refreshCuratedList() {
@@ -391,13 +527,67 @@ function refreshCuratedList() {
     for (var k = 0; k < removeBtns.length; k++) {
       removeBtns[k].addEventListener('click', function () {
         var id = this.getAttribute('data-id');
-        if (confirm('Remove this chart?')) {
-          emit('nauticaRemove', { nauticaId: id }).then(function () {
-            refreshCuratedList();
-          });
-        }
+        var reason = prompt('Reason for deletion (required):');
+        if (reason === null) return;
+        reason = reason.trim();
+        if (!reason) { alert('A deletion reason is required.'); return; }
+        emit('nauticaRemove', { nauticaId: id, reason: reason }).then(function (response) {
+          var result = response.data;
+          if (result && result.error) {
+            alert(result.error);
+            return;
+          }
+          loadExistingIds();
+          refreshCuratedList();
+          refreshDeletedList();
+        });
       });
     }
+  });
+}
+
+// ─── Deleted Charts List ────────────────────────────────────────────────────
+
+function refreshDeletedList() {
+  var container = document.getElementById('deleted-list');
+  if (!container) return;
+  emit('nauticaDeletedList', {}).then(function (response) {
+    var result = response.data;
+    if (!result || result.error) {
+      container.innerHTML = '<div class="notification is-danger is-light">' + (result ? result.error : 'Error') + '</div>';
+      return;
+    }
+
+    var rows = result.deleted || [];
+    if (rows.length === 0) {
+      container.innerHTML = '<p class="has-text-grey">No deleted charts.</p>';
+      return;
+    }
+
+    var html = '<table class="table is-fullwidth is-striped"><thead><tr>' +
+      '<th>Title</th><th>Artist</th><th>Previous Status</th><th>Reason</th><th>Deleted By</th><th>Deleted At</th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var when = r.deletedAt ? new Date(r.deletedAt).toLocaleString() : '';
+      var titleCell = r.jacketUrl
+        ? '<img src="' + escapeAttr(r.jacketUrl) + '" style="width:32px;height:32px;border-radius:3px;object-fit:cover;vertical-align:middle;margin-right:0.4rem" onerror="this.style.display=\'none\'">' +
+          '<a href="https://ksm.dev/songs/' + encodeURIComponent(r.nauticaId) + '" target="_blank">' + escapeHtml(r.title || '(untitled)') + '</a>'
+        : '<a href="https://ksm.dev/songs/' + encodeURIComponent(r.nauticaId) + '" target="_blank">' + escapeHtml(r.title || '(untitled)') + '</a>';
+
+      html += '<tr>' +
+        '<td>' + titleCell + '</td>' +
+        '<td>' + escapeHtml(r.artist || '') + '</td>' +
+        '<td><span class="curated-status status-' + escapeAttr(r.previousStatus || '') + '">' + escapeHtml(r.previousStatus || '') + '</span></td>' +
+        '<td>' + escapeHtml(r.deletedReason || '') + '</td>' +
+        '<td>' + escapeHtml(r.deletedBy || '') + '</td>' +
+        '<td>' + escapeHtml(when) + '</td>' +
+        '</tr>';
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
   });
 }
 
@@ -417,3 +607,4 @@ function escapeAttr(str) {
 
 refreshNominationQueue();
 refreshCuratedList();
+refreshDeletedList();

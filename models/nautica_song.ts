@@ -31,4 +31,9 @@ export interface NauticaSong {
   rejectedReason?: string;
   rejectedBy?: string;
   rejectedAt?: number;
+
+  // Google Drive offload (set once uploaded post-conversion)
+  driveFileId?: string;
+  driveFileSize?: number;
+  driveUploadedAt?: number;
 }
