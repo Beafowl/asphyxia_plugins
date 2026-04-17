@@ -484,8 +484,17 @@ export const nauticaRemove = async (data: { nauticaId: string; reason?: string; 
 export const nauticaReconvertAll = async (data: any, send: WebUISend) => {
   try {
     const allSongs = await DB.Find<NauticaSong>({ collection: 'nautica_song' });
+    // Include ready, error, and orphaned pending/converting charts. The conversion
+    // queue is in-memory, so a server restart or crash mid-convert leaves DB rows
+    // stuck on 'pending' or 'converting' with no runner behind them. Reconvert
+    // should sweep those up too.
     const toReconvert = (allSongs || []).filter(
-      (s: any) => s.mid && s.mid > 0 && (s.status === 'ready' || s.status === 'error')
+      (s: any) =>
+        s.mid && s.mid > 0 &&
+        (s.status === 'ready' ||
+          s.status === 'error' ||
+          s.status === 'pending' ||
+          s.status === 'converting')
     );
 
     for (const song of toReconvert) {

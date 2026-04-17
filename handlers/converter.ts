@@ -13,6 +13,10 @@ let conversionQueue: NauticaSong[] = [];
 let isConverting = false;
 
 export async function convertNauticaSong(song: NauticaSong): Promise<void> {
+  // Skip if this chart is already waiting in the queue — prevents double-queueing
+  // if Reconvert All is pressed twice, or if an admin requeues a chart that is
+  // still pending from an earlier call.
+  if (conversionQueue.some(s => s.nauticaId === song.nauticaId)) return;
   conversionQueue.push(song);
   if (!isConverting) processQueue();
 }
