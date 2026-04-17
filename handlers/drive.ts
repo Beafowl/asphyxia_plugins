@@ -155,6 +155,9 @@ export async function deleteDriveFile(fileId: string): Promise<void> {
       path: `/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true`,
       headers: { 'Authorization': `Bearer ${token}` },
     });
+    // 404 means the file is already gone (manually deleted or never existed) —
+    // that's the desired end state, so don't surface it as an error.
+    if (res.statusCode === 404) return;
     if (res.statusCode !== 204 && res.statusCode !== 200) {
       console.error(`[Drive] Delete failed for ${fileId}: HTTP ${res.statusCode} — ${res.body}`);
     }
