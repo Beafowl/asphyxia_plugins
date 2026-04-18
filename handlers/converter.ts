@@ -210,6 +210,16 @@ async function processQueue() {
   if (isConverting || conversionQueue.length === 0) return;
   isConverting = true;
 
+  try {
+    await processQueueLoop();
+  } finally {
+    isConverting = false;
+  }
+}
+
+// Kept separate so the outer processQueue can reliably reset isConverting
+// via try/finally even if an unhandled exception sneaks through.
+async function processQueueLoop() {
   // 1-ahead prefetch: while VoxCharger runs on song N, download/extract for
   // song N+1 in the background. Downloads are ~5s, VoxCharger ~20-60s, so
   // the next song's zip is already staged by the time we need it. Conversion
@@ -278,8 +288,6 @@ async function processQueue() {
       );
     }
   }
-
-  isConverting = false;
 }
 
 // Phase 1 of conversion: allocate mid, download the Nautica zip, extract it,
