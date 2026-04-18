@@ -151,16 +151,13 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
         $localState.Remove([int]$mid) | Out-Null
     }
 
-    # Step 6: Download new/updated charts
+    # Step 6: Download new/updated charts (parallel on PS7+, serial fallback on PS5)
     $ProgressPreference = 'SilentlyContinue'
-    $ok = 0
-    $failed = 0
+
+    # Pre-clean old folders sequentially (avoid race conditions between parallel workers)
     foreach ($c in $toDownload) {
         $mid = [int]$c.mid
         $idStr = "{0:D4}" -f $mid
-        Write-Host ("  Downloading [{0}] {1}..." -f $idStr, $c.title) -NoNewline
-
-        # If an older version is installed, drop its folder first so we don't keep stale files
         if ($installedMids.ContainsKey($mid)) {
             $oldFolder = Join-Path $musicDir $installedMids[$mid]
             if (Test-Path $oldFolder) { Remove-Item -Path $oldFolder -Recurse -Force }
@@ -170,29 +167,87 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
                 }
             }
         }
+    }
 
-        $zipPath = Join-Path $env:TEMP ("asphyxia_chart_{0}.zip" -f $idStr)
-        $url = $c.downloadUrl
-        if ($url -like "https://drive.google.com/*" -and $url -notmatch "confirm=") {
-            $url += "&confirm=t"
+    $useParallel = $PSVersionTable.PSVersion.Major -ge 7
+    $ok = 0
+    $failed = 0
+
+    if ($useParallel) {
+        # PowerShell 7+: ForEach-Object -Parallel with a concurrency cap. Keep it
+        # modest — Drive throttles aggressive concurrent requests to a single
+        # account, and the 4-wide pool keeps network saturated without tripping
+        # rate limits.
+        $results = $toDownload | ForEach-Object -ThrottleLimit 4 -Parallel {
+            $c = $_
+            $mid = [int]$c.mid
+            $idStr = "{0:D4}" -f $mid
+            $zipPath = Join-Path $env:TEMP ("asphyxia_chart_{0}.zip" -f $idStr)
+            $url = $c.downloadUrl
+            if ($url -like "https://drive.google.com/*" -and $url -notmatch "confirm=") { $url += "&confirm=t" }
+
+            $ProgressPreference = 'SilentlyContinue'
+            try {
+                Invoke-WebRequest -Uri $url -OutFile $zipPath -TimeoutSec 180 -UseBasicParsing
+                $bytes = [System.IO.File]::ReadAllBytes($zipPath) | Select-Object -First 2
+                if ($bytes.Count -lt 2 -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
+                    if (Test-Path $zipPath) { Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue }
+                    return [pscustomobject]@{ mid=$mid; idStr=$idStr; title=$c.title; convertedAt=$c.convertedAt; zipPath=$null; error="not a zip (Drive interstitial?)" }
+                }
+                return [pscustomobject]@{ mid=$mid; idStr=$idStr; title=$c.title; convertedAt=$c.convertedAt; zipPath=$zipPath; error=$null }
+            } catch {
+                if (Test-Path $zipPath) { Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue }
+                return [pscustomobject]@{ mid=$mid; idStr=$idStr; title=$c.title; convertedAt=$c.convertedAt; zipPath=$null; error=$_.Exception.Message }
+            }
         }
 
-        try {
-            Invoke-WebRequest -Uri $url -OutFile $zipPath -TimeoutSec 180 -UseBasicParsing
-            # Sanity check — Drive sometimes returns HTML when the quota is exhausted
-            $bytes = [System.IO.File]::ReadAllBytes($zipPath) | Select-Object -First 2
-            if ($bytes.Count -lt 2 -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
-                throw "Downloaded file is not a zip (Drive may have returned an HTML interstitial)."
+        # Extract serially — Expand-Archive into the same customDir is not safe concurrently
+        foreach ($r in $results) {
+            Write-Host ("  [{0}] {1}..." -f $r.idStr, $r.title) -NoNewline
+            if ($r.error) {
+                $failed++
+                Write-Host (" FAILED: {0}" -f $r.error) -ForegroundColor Red
+                continue
             }
-            Expand-Archive -Path $zipPath -DestinationPath $customDir -Force
-            Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
-            $localState[$mid] = [long]$c.convertedAt
-            $ok++
-            Write-Host " OK" -ForegroundColor Green
-        } catch {
-            $failed++
-            Write-Host (" FAILED: {0}" -f $_.Exception.Message) -ForegroundColor Red
-            if (Test-Path $zipPath) { Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue }
+            try {
+                Expand-Archive -Path $r.zipPath -DestinationPath $customDir -Force
+                Remove-Item -Path $r.zipPath -Force -ErrorAction SilentlyContinue
+                $localState[[int]$r.mid] = [long]$r.convertedAt
+                $ok++
+                Write-Host " OK" -ForegroundColor Green
+            } catch {
+                $failed++
+                Write-Host (" FAILED (extract): {0}" -f $_.Exception.Message) -ForegroundColor Red
+                if (Test-Path $r.zipPath) { Remove-Item -Path $r.zipPath -Force -ErrorAction SilentlyContinue }
+            }
+        }
+    } else {
+        # PowerShell 5 fallback: serial downloads.
+        foreach ($c in $toDownload) {
+            $mid = [int]$c.mid
+            $idStr = "{0:D4}" -f $mid
+            Write-Host ("  Downloading [{0}] {1}..." -f $idStr, $c.title) -NoNewline
+
+            $zipPath = Join-Path $env:TEMP ("asphyxia_chart_{0}.zip" -f $idStr)
+            $url = $c.downloadUrl
+            if ($url -like "https://drive.google.com/*" -and $url -notmatch "confirm=") { $url += "&confirm=t" }
+
+            try {
+                Invoke-WebRequest -Uri $url -OutFile $zipPath -TimeoutSec 180 -UseBasicParsing
+                $bytes = [System.IO.File]::ReadAllBytes($zipPath) | Select-Object -First 2
+                if ($bytes.Count -lt 2 -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
+                    throw "Downloaded file is not a zip (Drive may have returned an HTML interstitial)."
+                }
+                Expand-Archive -Path $zipPath -DestinationPath $customDir -Force
+                Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
+                $localState[$mid] = [long]$c.convertedAt
+                $ok++
+                Write-Host " OK" -ForegroundColor Green
+            } catch {
+                $failed++
+                Write-Host (" FAILED: {0}" -f $_.Exception.Message) -ForegroundColor Red
+                if (Test-Path $zipPath) { Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue }
+            }
         }
     }
     $ProgressPreference = 'Continue'

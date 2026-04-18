@@ -21,22 +21,45 @@ export async function convertNauticaSong(song: NauticaSong): Promise<void> {
   if (!isConverting) processQueue();
 }
 
+// Prefetched artifacts for a song whose zip has already been downloaded and
+// extracted, ready for VoxCharger to run on it. `null` means prep failed —
+// the error was already logged and DB status updated by prepareForConversion.
+interface PreparedSong {
+  song: NauticaSong;
+  kshFile: string;
+  tmpDir: string;
+}
+
 async function processQueue() {
   if (isConverting || conversionQueue.length === 0) return;
   isConverting = true;
 
-  while (conversionQueue.length > 0) {
-    const song = conversionQueue.shift()!;
+  // 1-ahead prefetch: while VoxCharger runs on song N, download/extract for
+  // song N+1 in the background. Downloads are ~5s, VoxCharger ~20-60s, so
+  // the next song's zip is already staged by the time we need it. Conversion
+  // itself stays serial — VoxCharger writes music_db.merged.xml, and racing
+  // writes would corrupt it.
+  let nextPrepared: Promise<PreparedSong | null> | null = null;
+
+  while (conversionQueue.length > 0 || nextPrepared) {
+    let prepared: PreparedSong | null;
+    if (nextPrepared) {
+      prepared = await nextPrepared;
+      nextPrepared = null;
+    } else {
+      prepared = await prepareForConversion(conversionQueue.shift()!);
+    }
+
+    // Kick off the download for the song after the one we're about to run.
+    if (conversionQueue.length > 0) {
+      nextPrepared = prepareForConversion(conversionQueue.shift()!);
+    }
+
+    if (!prepared) continue; // prep failed; DB already marked 'error'
+
+    const song = prepared.song;
     try {
-      // Allocate music ID here inside the sequential queue to prevent duplicates
-      if (!song.mid || song.mid === 0) {
-        song.mid = await GetNextNauticaId();
-      }
-      await DB.Update<NauticaSong>(
-        { collection: 'nautica_song', nauticaId: song.nauticaId },
-        { $set: { status: 'converting' as const, mid: song.mid } }
-      );
-      await doConversion(song);
+      await executeConversion(prepared);
       await DB.Update<NauticaSong>(
         { collection: 'nautica_song', nauticaId: song.nauticaId },
         { $set: { status: 'ready' as const, convertedAt: Date.now() } }
@@ -83,7 +106,54 @@ async function processQueue() {
   isConverting = false;
 }
 
-async function doConversion(song: NauticaSong): Promise<void> {
+// Phase 1 of conversion: allocate mid, download the Nautica zip, extract it,
+// and locate the .ksh file. Runs in parallel across songs (network-bound).
+// On failure marks the song as 'error' and returns null so the caller can
+// skip it without aborting the whole batch.
+async function prepareForConversion(song: NauticaSong): Promise<PreparedSong | null> {
+  try {
+    if (!song.mid || song.mid === 0) {
+      song.mid = await GetNextNauticaId();
+    }
+    await DB.Update<NauticaSong>(
+      { collection: 'nautica_song', nauticaId: song.nauticaId },
+      { $set: { status: 'converting' as const, mid: song.mid } }
+    );
+
+    const tmpDir = path.join(os.tmpdir(), `nautica_${song.nauticaId}`);
+    if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.mkdirSync(tmpDir, { recursive: true });
+
+    console.log(`[Nautica] Downloading: ${song.title}`);
+    const zipPath = path.join(tmpDir, 'chart.zip');
+    await downloadFile(song.downloadUrl, zipPath);
+
+    const extractDir = path.join(tmpDir, 'extracted');
+    fs.mkdirSync(extractDir, { recursive: true });
+    await extractZip(zipPath, extractDir);
+
+    const kshFiles = findFiles(extractDir, '.ksh');
+    if (kshFiles.length === 0) throw new Error('No .ksh files found in downloaded chart');
+    const kshFile = kshFiles[0];
+    console.log(`[Nautica] Prepared: ${song.title} (${path.basename(kshFile)})`);
+
+    return { song, kshFile, tmpDir };
+  } catch (err: any) {
+    console.error(`[Nautica] Prep failed for ${song.title}: ${err.message}`);
+    await DB.Update<NauticaSong>(
+      { collection: 'nautica_song', nauticaId: song.nauticaId },
+      { $set: { status: 'error' as const, errorMessage: err.message } }
+    );
+    return null;
+  }
+}
+
+// Phase 2 of conversion: run VoxCharger on the prepared KSH, patch the
+// merged XML, update the asphyxia-side custom music DB, invalidate caches,
+// and clean up the temp directory. Must run serially — VoxCharger writes
+// music_db.merged.xml and concurrent writes would corrupt it.
+async function executeConversion(prepared: PreparedSong): Promise<void> {
+  const { song, kshFile, tmpDir } = prepared;
   const gameRoot = U.GetConfig('sdvx_eg_root_dir');
   const voxchargerPath = U.GetConfig('sdvx_voxcharger_path');
   const mixName = U.GetConfig('sdvx_custom_mix_name') || 'asphyxia_custom';
@@ -94,32 +164,7 @@ async function doConversion(song: NauticaSong): Promise<void> {
 
   const ascii = sanitizeAscii(song.title);
 
-  // Create temp directory for download/extraction
-  const tmpDir = path.join(os.tmpdir(), `nautica_${song.nauticaId}`);
-  if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
-  fs.mkdirSync(tmpDir, { recursive: true });
-
   try {
-    // Step 1: Download ZIP from Nautica
-    console.log(`[Nautica] Downloading: ${song.title}`);
-    const zipPath = path.join(tmpDir, 'chart.zip');
-    await downloadFile(song.downloadUrl, zipPath);
-
-    // Step 2: Extract ZIP
-    const extractDir = path.join(tmpDir, 'extracted');
-    fs.mkdirSync(extractDir, { recursive: true });
-    await extractZip(zipPath, extractDir);
-
-    // Step 3: Find the first KSH file
-    const kshFiles = findFiles(extractDir, '.ksh');
-    if (kshFiles.length === 0) throw new Error('No .ksh files found in downloaded chart');
-
-    const kshFile = kshFiles[0];
-    console.log(`[Nautica] Found KSH: ${path.basename(kshFile)}`);
-
-    // Step 4: Run VoxCharger --full-import (async so the event loop stays free
-    // while VoxCharger is running — otherwise the server is unresponsive for
-    // the 30s-2min each chart takes).
     const voxArgs = [
       '--full-import', kshFile,
       '--game-path', gameRoot,
@@ -134,15 +179,9 @@ async function doConversion(song: NauticaSong): Promise<void> {
     const output = await runCommand(voxchargerPath, voxArgs, { timeout: 600000 });
     console.log(`[Nautica] VoxCharger output:\n${output}`);
 
-    // Step 5: Fix VoxCharger XML output (garbled encoding + leading zeros)
     patchMergedXml(song, gameRoot, mixName);
-
-    // Step 6: Update custom_music_db.json for asphyxia score tracking
     updateCustomMusicDb(song);
-
-    // Step 7: Invalidate cache
     invalidateMusicDbCache();
-
   } finally {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   }
