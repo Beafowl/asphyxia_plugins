@@ -561,15 +561,23 @@ function refreshCuratedList() {
           btn.classList.remove('is-loading');
           btn.disabled = false;
           var result = response && response.data;
-          if (result && result.error) {
+          if (!result) {
+            alert('Server returned no response. The nauticaReconvert event is likely not registered — restart the Asphyxia server after rebuilding.');
+            return;
+          }
+          if (result.error) {
             alert(result.error);
             return;
           }
+          if (!result.success) {
+            alert('Reconvert did not confirm success. Check the server log.');
+            return;
+          }
           refreshCuratedList();
-        }).catch(function () {
+        }).catch(function (err) {
           btn.classList.remove('is-loading');
           btn.disabled = false;
-          alert('Failed to queue reconversion.');
+          alert('Failed to queue reconversion: ' + (err && err.message ? err.message : err));
         });
       });
     }
