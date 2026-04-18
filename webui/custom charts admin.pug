@@ -79,6 +79,15 @@ div
           span.icon
             i.mdi.mdi-refresh
           span Reconvert All (VoxCharger)
+        button.button.is-info#curated-export-btn(title="Download the full curated chart list as JSON so it can be re-imported on another server.")
+          span.icon
+            i.mdi.mdi-download
+          span Export List
+        button.button.is-info.is-light#curated-import-btn(title="Upload a previously-exported JSON. New entries are added with status 'pending'; existing charts are left untouched.")
+          span.icon
+            i.mdi.mdi-upload
+          span Import List
+        input#curated-import-file(type="file" accept=".json,application/json" style="display:none")
       #curated-list
         p.has-text-grey Loading curated charts...
 

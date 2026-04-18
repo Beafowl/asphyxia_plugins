@@ -34,6 +34,8 @@ import {
   nauticaConvertStatus,
   nauticaReconvert,
   nauticaReconvertAll,
+  nauticaExportList,
+  nauticaImportList,
   nauticaDownloadSong,
   nauticaDownloadAll,
   nauticaNominate,
@@ -90,6 +92,8 @@ export function register() {
   R.WebUIEvent('nauticaConvertStatus', nauticaConvertStatus);
   R.WebUIEvent('nauticaReconvert', nauticaReconvert);
   R.WebUIEvent('nauticaReconvertAll', nauticaReconvertAll);
+  R.WebUIEvent('nauticaExportList', nauticaExportList);
+  R.WebUIEvent('nauticaImportList', nauticaImportList);
   R.WebUIEvent('nauticaDownloadSong', nauticaDownloadSong);
   R.WebUIEvent('nauticaDownloadAll', nauticaDownloadAll);
   R.WebUIEvent('nauticaNominate', nauticaNominate);

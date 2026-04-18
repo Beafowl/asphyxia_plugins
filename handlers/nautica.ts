@@ -481,6 +481,85 @@ export const nauticaRemove = async (data: { nauticaId: string; reason?: string; 
   }
 };
 
+// Export every row of the nautica_song collection as a portable JSON bundle.
+// Strips the internal `collection` field and Drive-specific state (which is
+// site-local) but keeps everything needed to recreate the entry elsewhere:
+// nauticaId, mid, title/artist metadata, chart array, download URL, status.
+export const nauticaExportList = async (data: any, send: WebUISend) => {
+  try {
+    const songs = await DB.Find<NauticaSong>({ collection: 'nautica_song' });
+    const exported = (songs || []).map((s: any) => ({
+      nauticaId:       s.nauticaId,
+      mid:             s.mid || 0,
+      title:           s.title,
+      artist:          s.artist,
+      jacketUrl:       s.jacketUrl,
+      downloadUrl:     s.downloadUrl,
+      charts:          s.charts || [],
+      tags:            s.tags || [],
+      status:          s.status,
+      curatedBy:       s.curatedBy,
+      curatedAt:       s.curatedAt,
+      nominatedBy:     s.nominatedBy,
+      nominatedAt:     s.nominatedAt,
+      nominationNote:  s.nominationNote,
+    }));
+    send.json({
+      version: 1,
+      exportedAt: Date.now(),
+      exportedBy: data.__username || 'admin',
+      count: exported.length,
+      songs: exported,
+    });
+  } catch (err: any) {
+    send.json({ error: err.message || 'Failed to export list' });
+  }
+};
+
+// Import a previously-exported list. New entries land with status 'pending'
+// and mid=0 so the admin can Reconvert All to actually build the audio
+// assets. Entries whose nauticaId already exists locally are left alone —
+// we never overwrite an existing chart's state on import.
+export const nauticaImportList = async (data: any, send: WebUISend) => {
+  try {
+    const incoming: any[] = Array.isArray(data.songs) ? data.songs : null;
+    if (!incoming) { send.json({ error: 'Invalid import payload — expected { songs: [...] }' }); return; }
+
+    let added = 0, skippedExisting = 0, skippedInvalid = 0;
+    for (const s of incoming) {
+      if (!s || !s.nauticaId || !s.title || !s.downloadUrl) { skippedInvalid++; continue; }
+      if (!s.downloadUrl.match(/^https:\/\/[a-z0-9.]*cdn\.digitaloceanspaces\.com\/ksm\.dev\//)) {
+        skippedInvalid++;
+        continue;
+      }
+
+      const existing = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: s.nauticaId });
+      if (existing) { skippedExisting++; continue; }
+
+      const doc: any = {
+        collection: 'nautica_song',
+        nauticaId:   s.nauticaId,
+        mid:         0,
+        title:       String(s.title),
+        artist:      s.artist ? String(s.artist) : '',
+        jacketUrl:   s.jacketUrl ? String(s.jacketUrl) : '',
+        downloadUrl: String(s.downloadUrl),
+        charts:      Array.isArray(s.charts) ? s.charts : [],
+        tags:        Array.isArray(s.tags) ? s.tags : [],
+        status:      'pending' as const,
+        curatedBy:   data.__username || 'import',
+        curatedAt:   Date.now(),
+      };
+      await DB.Insert(doc);
+      added++;
+    }
+
+    send.json({ success: true, added, skippedExisting, skippedInvalid });
+  } catch (err: any) {
+    send.json({ error: err.message || 'Failed to import list' });
+  }
+};
+
 export const nauticaReconvert = async (data: { nauticaId: string }, send: WebUISend) => {
   try {
     if (!data.nauticaId) { send.json({ error: 'Missing nauticaId' }); return; }
