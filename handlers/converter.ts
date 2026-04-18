@@ -243,7 +243,10 @@ function sanitizeAscii(title: string): string {
 }
 
 function updateCustomMusicDb(song: NauticaSong): void {
-  const customDbPath = 'plugins/sdvx@asphyxia/webui/asset/json/custom_music_db.json';
+  // Absolute path via IO.Resolve — using a relative 'plugins/...' string broke
+  // when node was started from dist/ (cwd = dist/, so writes landed in
+  // dist/plugins/... and the real webui asset never got updated).
+  const customDbPath = IO.Resolve('webui/asset/json/custom_music_db.json');
 
   let data: any = { mdb: { music: [] } };
   if (fs.existsSync(customDbPath)) {

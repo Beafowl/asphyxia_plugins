@@ -632,7 +632,7 @@ function createFullMixZip(modBase: string, mixName: string): Promise<Buffer> {
 
 function removeFromCustomMusicDb(musicId: number) {
   try {
-    const customDbPath = 'plugins/sdvx@asphyxia/webui/asset/json/custom_music_db.json';
+    const customDbPath = IO.Resolve('webui/asset/json/custom_music_db.json');
     if (!fs.existsSync(customDbPath)) return;
     const data = JSON.parse(fs.readFileSync(customDbPath, 'utf8'));
     if (!data?.mdb?.music) return;
