@@ -328,13 +328,21 @@ function patchMergedXml(song: NauticaSong, gameRoot: string, mixName: string): v
     entry = entry.replace(/<title_yomigana>[^<]*<\/title_yomigana>/, `<title_yomigana>${sjisDummy}</title_yomigana>`);
     entry = entry.replace(/<artist_yomigana>[^<]*<\/artist_yomigana>/, `<artist_yomigana>${sjisDummy}</artist_yomigana>`);
 
-    // Fix leading zeros in typed numeric values
-    entry = entry.replace(/__type="(u\d+|s\d+)">0+(\d)/g, '__type="$1">$2');
-
-    // Fix empty illustrator tags
-    entry = entry.replace(/<illustrator><\/illustrator>/g, '<illustrator>-</illustrator>');
-
+    // Splice the per-entry edits back in, then apply global fixes to the
+    // WHOLE document. VoxCharger re-serializes every entry on every import,
+    // so leading-zero BPMs and empty illustrator tags re-appear for older
+    // songs whenever a new one is imported. Fixing per-entry only patches
+    // the current song — global fixes keep all entries clean.
     xml = xml.slice(0, entryStart) + entry + xml.slice(entryEnd + 8);
+
+    // Strip leading zeros in typed numeric values — otherwise the game's
+    // prop parser reads values like "06380" as octal and aborts music_db
+    // parsing (error 80092209), which breaks chart selection and scores.
+    xml = xml.replace(/__type="(u\d+|s\d+)">0+(\d)/g, '__type="$1">$2');
+
+    // Fix empty illustrator tags across all entries.
+    xml = xml.replace(/<illustrator><\/illustrator>/g, '<illustrator>-</illustrator>');
+
     fs.writeFileSync(xmlPath, xml, 'binary');
 
     console.log(`[Nautica] Patched XML for ${song.title} (ID ${song.mid})`);
