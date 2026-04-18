@@ -164,14 +164,22 @@ async function doBulkConvert(songs: NauticaSong[]): Promise<{ ok: number; failed
     }
   }
 
-  // Phase 6: Drive uploads in parallel (fire-and-forget).
+  // Phase 6: Drive uploads — throttled + retry. Firing all N at once caused
+  // Google to reset most of the connections mid-upload (read ECONNRESET).
+  // 3 concurrent uploads keeps the pipe busy without tripping rate limits,
+  // and a small retry with backoff handles transient resets.
   if (isDriveEnabled()) {
-    for (const p of prepared) {
-      (async () => {
-        const latest = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: p.song.nauticaId });
-        if (!latest) return;
-        const upStart = Date.now();
-        console.log(`[Nautica] Uploading to Drive: ${latest.title} (ID ${latest.mid})...`);
+    const DRIVE_CONCURRENCY = 3;
+    const uploadQueue = prepared.slice();
+
+    const runOne = async (p: PreparedSong) => {
+      const latest = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: p.song.nauticaId });
+      if (!latest) return;
+      const upStart = Date.now();
+      console.log(`[Nautica] Uploading to Drive: ${latest.title} (ID ${latest.mid})...`);
+
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         try {
           const result = await uploadSongZip(latest);
           if (!result) {
@@ -189,11 +197,35 @@ async function doBulkConvert(songs: NauticaSong[]): Promise<{ ok: number; failed
           const mb = (result.size / (1024 * 1024)).toFixed(2);
           const secs = ((Date.now() - upStart) / 1000).toFixed(1);
           console.log(`[Nautica] Uploaded to Drive: ${latest.title} — ${mb} MB in ${secs}s`);
+          return;
         } catch (err: any) {
-          console.error(`[Nautica] Drive upload failed for ${latest.title}: ${err.message}`);
+          const msg = (err && err.message) || String(err);
+          const transient = /ECONNRESET|ETIMEDOUT|ECONNREFUSED|socket hang up|EAI_AGAIN/i.test(msg);
+          if (transient && attempt < MAX_ATTEMPTS) {
+            const backoff = 2000 * attempt + Math.floor(Math.random() * 1000);
+            console.log(`[Nautica] Drive upload transient error for ${latest.title} (attempt ${attempt}/${MAX_ATTEMPTS}): ${msg}; retrying in ${backoff}ms`);
+            await new Promise(r => setTimeout(r, backoff));
+            continue;
+          }
+          console.error(`[Nautica] Drive upload failed for ${latest.title}: ${msg}`);
+          return;
         }
-      })();
+      }
+    };
+
+    const workers: Promise<void>[] = [];
+    for (let i = 0; i < Math.min(DRIVE_CONCURRENCY, uploadQueue.length); i++) {
+      workers.push((async () => {
+        while (uploadQueue.length > 0) {
+          const next = uploadQueue.shift()!;
+          await runOne(next);
+        }
+      })());
     }
+    // Fire and forget the overall wait so the function can return to its
+    // caller promptly; uploads continue in the background and log on their
+    // own. Errors never reject the promise (runOne swallows them).
+    Promise.all(workers).catch(() => {});
   }
 
   const totalSecs = ((Date.now() - startedAt) / 1000).toFixed(1);
