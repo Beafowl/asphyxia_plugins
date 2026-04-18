@@ -515,8 +515,14 @@ function refreshCuratedList() {
         '<td>' + chipHtml + '</td>' +
         '<td><span class="curated-status ' + statusClass + '">' + (s.status || 'pending') +
           (s.errorMessage ? ' — ' + escapeHtml(s.errorMessage) : '') + '</span></td>' +
-        '<td><button class="button is-small is-danger nautica-remove-btn" data-id="' + s.nauticaId + '">' +
-          '<span class="icon"><i class="mdi mdi-delete"></i></span></button></td>' +
+        '<td><div class="buttons are-small" style="flex-wrap:nowrap">' +
+          '<button class="button is-warning nautica-reconvert-btn" data-id="' + s.nauticaId + '" title="Reconvert this chart">' +
+            '<span class="icon"><i class="mdi mdi-refresh"></i></span>' +
+          '</button>' +
+          '<button class="button is-danger nautica-remove-btn" data-id="' + s.nauticaId + '" title="Delete this chart">' +
+            '<span class="icon"><i class="mdi mdi-delete"></i></span>' +
+          '</button>' +
+        '</div></td>' +
         '</tr>';
     }
 
@@ -540,6 +546,30 @@ function refreshCuratedList() {
           loadExistingIds();
           refreshCuratedList();
           refreshDeletedList();
+        });
+      });
+    }
+
+    var reconvertBtns = container.querySelectorAll('.nautica-reconvert-btn');
+    for (var rc = 0; rc < reconvertBtns.length; rc++) {
+      reconvertBtns[rc].addEventListener('click', function () {
+        var btn = this;
+        var id = btn.getAttribute('data-id');
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+        emit('nauticaReconvert', { nauticaId: id }).then(function (response) {
+          btn.classList.remove('is-loading');
+          btn.disabled = false;
+          var result = response && response.data;
+          if (result && result.error) {
+            alert(result.error);
+            return;
+          }
+          refreshCuratedList();
+        }).catch(function () {
+          btn.classList.remove('is-loading');
+          btn.disabled = false;
+          alert('Failed to queue reconversion.');
         });
       });
     }

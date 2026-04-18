@@ -481,6 +481,35 @@ export const nauticaRemove = async (data: { nauticaId: string; reason?: string; 
   }
 };
 
+export const nauticaReconvert = async (data: { nauticaId: string }, send: WebUISend) => {
+  try {
+    if (!data.nauticaId) { send.json({ error: 'Missing nauticaId' }); return; }
+
+    const song = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: data.nauticaId });
+    if (!song) { send.json({ error: 'Song not found' }); return; }
+    if (!song.mid || song.mid === 0) {
+      send.json({ error: 'Chart has not been converted yet' });
+      return;
+    }
+    if (song.status === 'nominated' || song.status === 'testing' || song.status === 'rejected') {
+      send.json({ error: `Cannot reconvert a ${song.status} chart` });
+      return;
+    }
+
+    await DB.Update<NauticaSong>(
+      { collection: 'nautica_song', nauticaId: data.nauticaId },
+      { $set: { status: 'pending' as const, errorMessage: '' } }
+    );
+    convertNauticaSong(song as any).catch((err) => {
+      console.error(`[Nautica] Reconversion failed for ${song.title}: ${err.message}`);
+    });
+
+    send.json({ success: true });
+  } catch (err: any) {
+    send.json({ error: err.message || 'Failed to queue reconversion' });
+  }
+};
+
 export const nauticaReconvertAll = async (data: any, send: WebUISend) => {
   try {
     const allSongs = await DB.Find<NauticaSong>({ collection: 'nautica_song' });
