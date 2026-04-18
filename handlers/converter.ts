@@ -110,9 +110,13 @@ async function doBulkConvert(songs: NauticaSong[]): Promise<{ ok: number; failed
     console.log(`[Nautica] Running: "${voxchargerPath}" ${voxArgs.map(a => `"${a}"`).join(' ')}`);
 
     // Cap at 5 min per chart (ffmpeg dominates, and parallel parsing is fast).
+    // Stream output live so the user sees VoxCharger's per-chart progress
+    // instead of a 10-minute silence followed by a wall of text.
     const timeoutMs = Math.max(600_000, 300_000 * prepared.length);
-    const output = await runCommand(voxchargerPath, voxArgs, { timeout: timeoutMs });
-    console.log(`[Nautica] VoxCharger bulk output:\n${output}`);
+    await runCommand(voxchargerPath, voxArgs, {
+      timeout: timeoutMs,
+      streamPrefix: '[VoxCharger]',
+    });
   } catch (err: any) {
     // If bulk import itself fails, mark every prepared song as error — we
     // have no way to know which charts were imported before the failure.
@@ -400,10 +404,15 @@ async function extractZip(zipPath: string, destDir: string): Promise<void> {
 // loop, so the server stays responsive while external tools (VoxCharger,
 // PowerShell) run. Collects stdout/stderr and rejects on non-zero exit or
 // timeout.
+//
+// When `streamPrefix` is set, each line of the child's stdout/stderr is
+// forwarded to the parent console in real time — required for long-running
+// tools (VoxCharger bulk mode can run 10+ minutes) so the user can see
+// progress without waiting for the process to exit.
 function runCommand(
   command: string,
   args: string[],
-  options: { timeout?: number; cwd?: string } = {}
+  options: { timeout?: number; cwd?: string; streamPrefix?: string } = {}
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -412,8 +421,28 @@ function runCommand(
     });
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
-    child.stdout.on('data', (d: Buffer) => stdoutChunks.push(d));
-    child.stderr.on('data', (d: Buffer) => stderrChunks.push(d));
+
+    const prefix = options.streamPrefix;
+    let stdoutCarry = '';
+    let stderrCarry = '';
+    const forwardLines = (carry: string, chunk: string, write: (line: string) => void): string => {
+      const combined = carry + chunk;
+      const lines = combined.split(/\r?\n/);
+      const tail = lines.pop() || '';
+      for (const line of lines) {
+        if (line.length > 0) write(line);
+      }
+      return tail;
+    };
+
+    child.stdout.on('data', (d: Buffer) => {
+      stdoutChunks.push(d);
+      if (prefix) stdoutCarry = forwardLines(stdoutCarry, d.toString('utf8'), line => console.log(`${prefix} ${line}`));
+    });
+    child.stderr.on('data', (d: Buffer) => {
+      stderrChunks.push(d);
+      if (prefix) stderrCarry = forwardLines(stderrCarry, d.toString('utf8'), line => console.error(`${prefix} ${line}`));
+    });
 
     let timedOut = false;
     const timer = options.timeout
@@ -429,6 +458,11 @@ function runCommand(
     });
     child.on('close', (code, signal) => {
       if (timer) clearTimeout(timer);
+      // Flush any pending partial line without a trailing newline.
+      if (prefix) {
+        if (stdoutCarry.length > 0) console.log(`${prefix} ${stdoutCarry}`);
+        if (stderrCarry.length > 0) console.error(`${prefix} ${stderrCarry}`);
+      }
       const stdout = Buffer.concat(stdoutChunks).toString('utf8');
       const stderr = Buffer.concat(stderrChunks).toString('utf8');
       if (timedOut) {
