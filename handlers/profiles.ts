@@ -9,6 +9,7 @@ import { ValgeneTicket } from '../models/valgene_ticket';
 import { WeeklyMusicScore } from '../models/weeklymusic';
 import { VariantPower } from '../models/variant';
 import { getVersion, IDToCode, loadMusicDb, isValidMid } from '../utils';
+import { invalidateHiscoreCache } from './features';
 import { Mix } from '../models/mix';
 import { CURRENT_ARENA, EVENT_ITEMS6, UNLOCK_EVENTS6 } from '../data/exg';
 import { CURRENT_ARENA7, EVENT_ITEMS7, UNLOCK_EVENTS7 } from '../data/nbl';
@@ -145,6 +146,10 @@ export const saveScore: EPR = async (info, data, send) => {
 
   const version = getVersion(info);
   const dVersion = parseInt(info.model.split(':')[4].slice(0, -2));
+
+  // A save_m means the global hiscore table for this version may have shifted;
+  // drop the cached response so the next game.sv7_hiscore rebuilds it.
+  invalidateHiscoreCache(Math.abs(version));
 
   if (version === -6 || version === 7) {
     // Using alternate scoring system after 20210831

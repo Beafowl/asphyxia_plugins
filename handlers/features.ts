@@ -4,8 +4,30 @@ import { Matchmaker } from '../models/matchmaker';
 import { getVersion, IDToCode, GetCounter } from '../utils';
 import { Rival } from '../models/rival';
 
+// game.sv7_hiscore is called repeatedly from song select and a few other
+// scenes (200+ req/5min observed). The handler scans every MusicRecord
+// and Profile for the version every time — ~225ms per call. Scores only
+// change on save_m, so a short per-version cache collapses the bursts
+// into a single real DB scan per TTL window. Invalidated synchronously
+// by saveScore below.
+interface HiscoreCacheEntry {
+  payload: any;
+  expiresAt: number;
+}
+const hiscoreCache = new Map<number, HiscoreCacheEntry>();
+const HISCORE_TTL_MS = 30_000;
+
+export function invalidateHiscoreCache(version: number) {
+  hiscoreCache.delete(version);
+}
+
 export const hiscore: EPR = async (info, data, send) => {
   const version = Math.abs(getVersion(info));
+
+  const cached = hiscoreCache.get(version);
+  if (cached && cached.expiresAt > Date.now()) {
+    return send.object(cached.payload);
+  }
 
   const records = await DB.Find<MusicRecord>(null, { collection: 'music', version, migrated: {$exists: false} });
 
@@ -14,7 +36,7 @@ export const hiscore: EPR = async (info, data, send) => {
     '__refid'
   );
 
-  return send.object({
+  const payload = {
     sc: {
       d: _.map(
         _.groupBy(records, r => {
@@ -32,7 +54,10 @@ export const hiscore: EPR = async (info, data, send) => {
         l_sc: K.ITEM('u32', r.score),
       })),
     },
-  });
+  };
+
+  hiscoreCache.set(version, { payload, expiresAt: Date.now() + HISCORE_TTL_MS });
+  return send.object(payload);
 };
 
 export const rival: EPR = async (info, data, send) => {
