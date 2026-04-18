@@ -262,6 +262,20 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
         Write-Host "  Could not refresh music_db.merged.xml (game may still work if the existing one is close enough)" -ForegroundColor Yellow
     }
 
+    # Step 7b: Nuke LayeredFS merge cache. Normally LayeredFS notices the
+    # source XML changed via its .hashed file and rebuilds on next launch,
+    # but we've observed stale caches persisting in edge cases. Deleting
+    # the cache dir forces a clean re-merge with the new content.
+    $cacheDir = Join-Path (Split-Path $customDir -Parent) "_cache"
+    if (Test-Path $cacheDir) {
+        try {
+            Remove-Item -Path $cacheDir -Recurse -Force -ErrorAction Stop
+            Write-Host "  Cleared LayeredFS cache" -ForegroundColor Green
+        } catch {
+            Write-Host ("  Could not clear LayeredFS cache: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        }
+    }
+
     # Step 8: Persist state
     $stateObj = @{}
     foreach ($k in $localState.Keys) { $stateObj["$k"] = $localState[$k] }
