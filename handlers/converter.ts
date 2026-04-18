@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 import * as os from 'os';
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import * as iconv from 'iconv-lite';
 import { NauticaSong } from '../models/nautica_song';
 import { GetNextNauticaId, invalidateMusicDbCache } from '../utils';
@@ -108,7 +108,7 @@ async function doConversion(song: NauticaSong): Promise<void> {
     // Step 2: Extract ZIP
     const extractDir = path.join(tmpDir, 'extracted');
     fs.mkdirSync(extractDir, { recursive: true });
-    extractZip(zipPath, extractDir);
+    await extractZip(zipPath, extractDir);
 
     // Step 3: Find the first KSH file
     const kshFiles = findFiles(extractDir, '.ksh');
@@ -117,15 +117,19 @@ async function doConversion(song: NauticaSong): Promise<void> {
     const kshFile = kshFiles[0];
     console.log(`[Nautica] Found KSH: ${path.basename(kshFile)}`);
 
-    // Step 4: Run VoxCharger --full-import
-    const cmd = `"${voxchargerPath}" --full-import "${kshFile}" --game-path "${gameRoot}" --mix "${mixName}" --music-id ${song.mid} --music-code "${ascii}"`;
-    console.log(`[Nautica] Running: ${cmd}`);
+    // Step 4: Run VoxCharger --full-import (async so the event loop stays free
+    // while VoxCharger is running — otherwise the server is unresponsive for
+    // the 30s-2min each chart takes).
+    const voxArgs = [
+      '--full-import', kshFile,
+      '--game-path', gameRoot,
+      '--mix', mixName,
+      '--music-id', String(song.mid),
+      '--music-code', ascii,
+    ];
+    console.log(`[Nautica] Running: "${voxchargerPath}" ${voxArgs.map(a => `"${a}"`).join(' ')}`);
 
-    const output = execSync(cmd, {
-      timeout: 120000,
-      stdio: 'pipe',
-      encoding: 'utf8',
-    });
+    const output = await runCommand(voxchargerPath, voxArgs, { timeout: 120000 });
     console.log(`[Nautica] VoxCharger output:\n${output}`);
 
     // Step 5: Fix VoxCharger XML output (garbled encoding + leading zeros)
@@ -162,11 +166,55 @@ function downloadFile(url: string, destPath: string): Promise<void> {
   });
 }
 
-function extractZip(zipPath: string, destDir: string): void {
-  execSync(
-    `powershell -NoProfile -Command "Expand-Archive -Path '${zipPath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force"`,
-    { timeout: 60000, stdio: 'pipe' }
-  );
+async function extractZip(zipPath: string, destDir: string): Promise<void> {
+  const psCommand = `Expand-Archive -Path '${zipPath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`;
+  await runCommand('powershell', ['-NoProfile', '-Command', psCommand], { timeout: 60000 });
+}
+
+// Promise-wrapped spawn. Unlike execSync this does NOT block the Node event
+// loop, so the server stays responsive while external tools (VoxCharger,
+// PowerShell) run. Collects stdout/stderr and rejects on non-zero exit or
+// timeout.
+function runCommand(
+  command: string,
+  args: string[],
+  options: { timeout?: number; cwd?: string } = {}
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      windowsHide: true,
+    });
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    child.stdout.on('data', (d: Buffer) => stdoutChunks.push(d));
+    child.stderr.on('data', (d: Buffer) => stderrChunks.push(d));
+
+    let timedOut = false;
+    const timer = options.timeout
+      ? setTimeout(() => {
+          timedOut = true;
+          child.kill('SIGKILL');
+        }, options.timeout)
+      : null;
+
+    child.on('error', err => {
+      if (timer) clearTimeout(timer);
+      reject(err);
+    });
+    child.on('close', (code, signal) => {
+      if (timer) clearTimeout(timer);
+      const stdout = Buffer.concat(stdoutChunks).toString('utf8');
+      const stderr = Buffer.concat(stderrChunks).toString('utf8');
+      if (timedOut) {
+        return reject(new Error(`Command timed out after ${options.timeout}ms`));
+      }
+      if (code !== 0) {
+        return reject(new Error(`Command exited ${code ?? signal}: ${stderr || stdout}`));
+      }
+      resolve(stdout);
+    });
+  });
 }
 
 function findFiles(dir: string, ext: string): string[] {
