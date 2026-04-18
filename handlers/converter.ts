@@ -129,7 +129,9 @@ async function doConversion(song: NauticaSong): Promise<void> {
     ];
     console.log(`[Nautica] Running: "${voxchargerPath}" ${voxArgs.map(a => `"${a}"`).join(' ')}`);
 
-    const output = await runCommand(voxchargerPath, voxArgs, { timeout: 120000 });
+    // 10 minute cap — VoxCharger runs ffmpeg internally and heavy remixes can
+    // take a few minutes on slower CPUs.
+    const output = await runCommand(voxchargerPath, voxArgs, { timeout: 600000 });
     console.log(`[Nautica] VoxCharger output:\n${output}`);
 
     // Step 5: Fix VoxCharger XML output (garbled encoding + leading zeros)
