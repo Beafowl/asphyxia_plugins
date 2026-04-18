@@ -7,7 +7,7 @@ import { NominationFeedback } from '../models/nomination_feedback';
 import { DeletedNauticaSong } from '../models/deleted_nautica_song';
 import { MusicRecord } from '../models/music_record';
 import { invalidateMusicDbCache } from '../utils';
-import { convertNauticaSong } from './converter';
+import { convertNauticaSong, bulkConvertNauticaSongs } from './converter';
 import { deleteDriveFile } from './drive';
 import { WebUISend } from '../../../src/eamuse/EamusePlugin';
 
@@ -531,10 +531,15 @@ export const nauticaReconvertAll = async (data: any, send: WebUISend) => {
         { collection: 'nautica_song', nauticaId: song.nauticaId },
         { $set: { status: 'pending' as const, errorMessage: '' } }
       );
-      convertNauticaSong(song as any).catch((err) => {
-        console.error(`[Nautica] Reconversion failed for ${song.title}: ${err.message}`);
-      });
     }
+
+    // Fire-and-forget: the bulk runner invokes VoxCharger once with a manifest
+    // of every target chart instead of calling it N times. Dramatically
+    // faster than per-chart conversion (one .exe startup, one DB save,
+    // parallel KSH parsing inside VoxCharger).
+    bulkConvertNauticaSongs(toReconvert as any).catch(err => {
+      console.error(`[Nautica] Bulk reconvert failed: ${err.message}`);
+    });
 
     send.json({ success: true, count: toReconvert.length });
   } catch (err: any) {

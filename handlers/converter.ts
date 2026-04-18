@@ -21,6 +21,182 @@ export async function convertNauticaSong(song: NauticaSong): Promise<void> {
   if (!isConverting) processQueue();
 }
 
+// Bulk reconversion path. Unlike convertNauticaSong (which queues per-song
+// and invokes VoxCharger once per chart), this prepares all charts in
+// parallel (download + extract), writes a manifest, then invokes VoxCharger
+// exactly once with --bulk-import --manifest. Target use case is
+// Reconvert All, where the N-times per-chart .exe startup / DB-load /
+// DB-save overhead dominates wall clock time.
+//
+// Mutually exclusive with the per-song queue via the shared isConverting
+// flag — callers should wait (see acquireSingleRunnerSlot) or just push
+// to the queue and let the queue drain first.
+export async function bulkConvertNauticaSongs(songs: NauticaSong[]): Promise<{ ok: number; failed: number }> {
+  if (songs.length === 0) return { ok: 0, failed: 0 };
+
+  await acquireSingleRunnerSlot();
+  isConverting = true;
+
+  try {
+    return await doBulkConvert(songs);
+  } finally {
+    isConverting = false;
+    // Drain anything that was queued via convertNauticaSong while bulk ran.
+    if (conversionQueue.length > 0) processQueue();
+  }
+}
+
+// Simple mutual-exclusion: spin until isConverting is false. JS is
+// single-threaded so the check-and-set pair after the await is atomic
+// wrt other async calls that do the same.
+async function acquireSingleRunnerSlot(): Promise<void> {
+  while (isConverting) {
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+
+async function doBulkConvert(songs: NauticaSong[]): Promise<{ ok: number; failed: number }> {
+  const gameRoot = U.GetConfig('sdvx_eg_root_dir');
+  const voxchargerPath = U.GetConfig('sdvx_voxcharger_path');
+  const mixName = U.GetConfig('sdvx_custom_mix_name') || 'asphyxia_custom';
+
+  if (!gameRoot) throw new Error('Game Data Directory not configured');
+  if (!voxchargerPath) throw new Error('VoxCharger path not configured');
+  if (!fs.existsSync(voxchargerPath)) throw new Error(`VoxCharger not found at: ${voxchargerPath}`);
+
+  console.log(`[Nautica] Bulk reconvert starting: ${songs.length} chart(s)`);
+  const startedAt = Date.now();
+
+  // Phase 1: download + extract all zips in parallel (throttled).
+  const CONCURRENT_PREPS = 4;
+  const prepared: PreparedSong[] = [];
+  const prepFailedIds: string[] = [];
+
+  const todo = [...songs];
+  const workers: Promise<void>[] = [];
+  for (let i = 0; i < Math.min(CONCURRENT_PREPS, todo.length); i++) {
+    workers.push((async () => {
+      while (todo.length > 0) {
+        const song = todo.shift()!;
+        const p = await prepareForConversion(song);
+        if (p) prepared.push(p);
+        else prepFailedIds.push(song.nauticaId);
+      }
+    })());
+  }
+  await Promise.all(workers);
+
+  if (prepared.length === 0) {
+    console.error('[Nautica] Bulk reconvert: all preparations failed');
+    return { ok: 0, failed: prepFailedIds.length };
+  }
+
+  // Phase 2: write manifest <mid>\t<code>\t<kshPath> per line.
+  const manifestPath = path.join(os.tmpdir(), `asphyxia_bulk_manifest_${Date.now()}.txt`);
+  const manifestLines = prepared.map(
+    p => `${p.song.mid}\t${sanitizeAscii(p.song.title)}\t${p.kshFile}`
+  );
+  fs.writeFileSync(manifestPath, manifestLines.join('\n'), 'utf8');
+  console.log(`[Nautica] Manifest written (${prepared.length} entries): ${manifestPath}`);
+
+  // Phase 3: one VoxCharger invocation for all charts.
+  try {
+    const voxArgs = [
+      '--bulk-import',
+      '--manifest', manifestPath,
+      '--game-path', gameRoot,
+      '--mix', mixName,
+    ];
+    console.log(`[Nautica] Running: "${voxchargerPath}" ${voxArgs.map(a => `"${a}"`).join(' ')}`);
+
+    // Cap at 5 min per chart (ffmpeg dominates, and parallel parsing is fast).
+    const timeoutMs = Math.max(600_000, 300_000 * prepared.length);
+    const output = await runCommand(voxchargerPath, voxArgs, { timeout: timeoutMs });
+    console.log(`[Nautica] VoxCharger bulk output:\n${output}`);
+  } catch (err: any) {
+    // If bulk import itself fails, mark every prepared song as error — we
+    // have no way to know which charts were imported before the failure.
+    console.error(`[Nautica] Bulk VoxCharger run failed: ${err.message}`);
+    for (const p of prepared) {
+      try { fs.rmSync(p.tmpDir, { recursive: true, force: true }); } catch {}
+      await DB.Update<NauticaSong>(
+        { collection: 'nautica_song', nauticaId: p.song.nauticaId },
+        { $set: { status: 'error' as const, errorMessage: `bulk import failed: ${err.message}` } }
+      );
+    }
+    try { fs.unlinkSync(manifestPath); } catch {}
+    return { ok: 0, failed: prepared.length + prepFailedIds.length };
+  }
+  try { fs.unlinkSync(manifestPath); } catch {}
+
+  // Phase 4: per-song post-processing.
+  //   - patchMergedXml applies the global (leading-zero / illustrator) fixes
+  //     to the WHOLE document on every call, so running it for each song is
+  //     idempotent (the last call wins for the global parts anyway).
+  //   - updateCustomMusicDb rewrites the json once per song.
+  //   - cleanup the per-song tmp dir.
+  for (const p of prepared) {
+    try {
+      patchMergedXml(p.song, gameRoot, mixName);
+      updateCustomMusicDb(p.song);
+    } catch (err: any) {
+      console.error(`[Nautica] Post-process failed for ${p.song.title}: ${err.message}`);
+    }
+    try { fs.rmSync(p.tmpDir, { recursive: true, force: true }); } catch {}
+  }
+  invalidateMusicDbCache();
+
+  // Phase 5: mark everything ready.
+  let ok = 0;
+  for (const p of prepared) {
+    try {
+      await DB.Update<NauticaSong>(
+        { collection: 'nautica_song', nauticaId: p.song.nauticaId },
+        { $set: { status: 'ready' as const, convertedAt: Date.now() } }
+      );
+      ok++;
+    } catch (err: any) {
+      console.error(`[Nautica] Status update failed for ${p.song.title}: ${err.message}`);
+    }
+  }
+
+  // Phase 6: Drive uploads in parallel (fire-and-forget).
+  if (isDriveEnabled()) {
+    for (const p of prepared) {
+      (async () => {
+        const latest = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: p.song.nauticaId });
+        if (!latest) return;
+        const upStart = Date.now();
+        console.log(`[Nautica] Uploading to Drive: ${latest.title} (ID ${latest.mid})...`);
+        try {
+          const result = await uploadSongZip(latest);
+          if (!result) {
+            console.log(`[Nautica] Drive upload skipped for ${latest.title}.`);
+            return;
+          }
+          await DB.Update<NauticaSong>(
+            { collection: 'nautica_song', nauticaId: latest.nauticaId },
+            { $set: {
+              driveFileId: result.fileId,
+              driveFileSize: result.size,
+              driveUploadedAt: Date.now(),
+            } }
+          );
+          const mb = (result.size / (1024 * 1024)).toFixed(2);
+          const secs = ((Date.now() - upStart) / 1000).toFixed(1);
+          console.log(`[Nautica] Uploaded to Drive: ${latest.title} — ${mb} MB in ${secs}s`);
+        } catch (err: any) {
+          console.error(`[Nautica] Drive upload failed for ${latest.title}: ${err.message}`);
+        }
+      })();
+    }
+  }
+
+  const totalSecs = ((Date.now() - startedAt) / 1000).toFixed(1);
+  console.log(`[Nautica] Bulk reconvert done: ${ok} converted, ${prepFailedIds.length} prep-failed in ${totalSecs}s`);
+  return { ok, failed: prepFailedIds.length };
+}
+
 // Prefetched artifacts for a song whose zip has already been downloaded and
 // extracted, ready for VoxCharger to run on it. `null` means prep failed —
 // the error was already logged and DB status updated by prepareForConversion.
