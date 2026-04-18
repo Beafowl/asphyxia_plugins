@@ -566,14 +566,13 @@ export const nauticaReconvert = async (data: { nauticaId: string }, send: WebUIS
 
     const song = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: data.nauticaId });
     if (!song) { send.json({ error: 'Song not found' }); return; }
-    if (!song.mid || song.mid === 0) {
-      send.json({ error: 'Chart has not been converted yet' });
-      return;
-    }
     if (song.status === 'nominated' || song.status === 'testing' || song.status === 'rejected') {
       send.json({ error: `Cannot reconvert a ${song.status} chart` });
       return;
     }
+    // mid === 0 is fine — it means this chart was approved but first-time
+    // conversion never completed. prepareForConversion allocates a fresh
+    // mid via GetNextNauticaId() when it's zero.
 
     await DB.Update<NauticaSong>(
       { collection: 'nautica_song', nauticaId: data.nauticaId },
@@ -592,17 +591,20 @@ export const nauticaReconvert = async (data: { nauticaId: string }, send: WebUIS
 export const nauticaReconvertAll = async (data: any, send: WebUISend) => {
   try {
     const allSongs = await DB.Find<NauticaSong>({ collection: 'nautica_song' });
-    // Include ready, error, and orphaned pending/converting charts. The conversion
-    // queue is in-memory, so a server restart or crash mid-convert leaves DB rows
-    // stuck on 'pending' or 'converting' with no runner behind them. Reconvert
-    // should sweep those up too.
+    // Include everything that should be on the server post-approval: ready
+    // charts (to refresh audio / re-apply fixes), errored charts, and any
+    // pending/converting rows orphaned by a restart mid-run. The conversion
+    // queue is in-memory, so those last two states accumulate if the server
+    // crashed or was killed before finishing. mid === 0 is allowed too —
+    // prepareForConversion allocates a fresh mid when needed, so never-
+    // converted charts get picked up on the first Reconvert All just like
+    // charts that have been converted before.
     const toReconvert = (allSongs || []).filter(
       (s: any) =>
-        s.mid && s.mid > 0 &&
-        (s.status === 'ready' ||
-          s.status === 'error' ||
-          s.status === 'pending' ||
-          s.status === 'converting')
+        s.status === 'ready' ||
+        s.status === 'error' ||
+        s.status === 'pending' ||
+        s.status === 'converting'
     );
 
     for (const song of toReconvert) {
