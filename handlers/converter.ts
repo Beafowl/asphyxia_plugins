@@ -407,16 +407,41 @@ async function executeConversion(prepared: PreparedSong): Promise<void> {
   }
 }
 
+// Nautica's CDN URLs embed the chart title verbatim in the filename segment
+// (e.g. `.../UUID-Annihilation in F# Minor.zip`). Characters that are special
+// in URL syntax — `#` (fragment), `@` (userinfo), `$`, spaces, non-ASCII —
+// either get stripped by Node's URL parser or get rejected by the CDN's
+// signed-URL validation, producing 403s. Percent-encode just the final path
+// segment to keep the scheme/host/path-to-file intact while escaping anything
+// problematic in the filename itself.
+function sanitizeUrlForDownload(url: string): string {
+  const lastSlash = url.lastIndexOf('/');
+  if (lastSlash < 0) return url;
+  const base = url.substring(0, lastSlash + 1);
+  let filename = url.substring(lastSlash + 1);
+  // Strip any existing fragment the server might have accidentally appended
+  // past the filename — those would have been dropped by Node's URL parser
+  // anyway.
+  const hashIdx = filename.indexOf('#');
+  if (hashIdx >= 0) filename = filename.substring(0, hashIdx);
+  // If the filename already looks percent-encoded (contains `%XX` sequences)
+  // don't double-encode it. Detection is coarse on purpose: any '%' followed
+  // by two hex digits anywhere counts as "already encoded".
+  if (/%[0-9A-Fa-f]{2}/.test(filename)) return base + filename;
+  return base + encodeURIComponent(filename);
+}
+
 function downloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const doGet = (url: string, redirects = 0) => {
       if (redirects > 5) return reject(new Error('Too many redirects'));
       const proto = url.startsWith('https') ? https : require('http');
-      proto.get(url, (res: any) => {
+      const safeUrl = sanitizeUrlForDownload(url);
+      proto.get(safeUrl, (res: any) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           return doGet(res.headers.location, redirects + 1);
         }
-        if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+        if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode} for ${safeUrl}`));
         const file = fs.createWriteStream(destPath);
         res.pipe(file);
         file.on('finish', () => { file.close(); resolve(); });
