@@ -131,8 +131,10 @@ foreach ($mid in $installedMids.Keys) {
     }
 }
 
-if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
-    Write-Host "Already up to date." -ForegroundColor Green
+$anyWork = ($toDownload.Count -gt 0) -or ($toDelete.Count -gt 0)
+
+if (-not $anyWork) {
+    Write-Host "Already up to date (checking merged XML anyway)." -ForegroundColor Green
 } else {
     Write-Host ""
     Write-Host ("Plan: {0} new/updated, {1} to delete" -f $toDownload.Count, $toDelete.Count) -ForegroundColor Cyan
@@ -348,59 +350,71 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
         }
     }
     $ProgressPreference = 'Continue'
+}
 
-    # Step 7: Refresh merged XML (reflects the current server-side set of charts)
-    #
-    # Buffer the response to memory, then write to disk. With -OutFile the
-    # client opens the destination path for write while the server is still
-    # reading the same file via res.sendFile, which on Windows trips "Der
-    # Prozess kann nicht auf die Datei zugreifen, da sie von einem anderen
-    # Prozess verwendet wird" whenever the sync runs on the same machine as
-    # the asphyxia-core server. Buffering sequences the two file operations —
-    # the server's read handle is closed by the time we open the
-    # destination for write.
+# Steps 7+ run unconditionally. The merged XML and LayeredFS cache must be
+# refreshed even when nothing was downloaded — otherwise a fresh box whose
+# charts are already synced never gets the XML written (symptom: "Already
+# up to date" followed by no music_db.merged.xml on disk).
+
+# Step 7: Refresh merged XML (reflects the current server-side set of charts)
+#
+# WebClient.DownloadData returns the response body as raw byte[] with no
+# text decoding. Critical because:
+#
+#   1. The XML is Shift-JIS and SDVX's prop parser requires exact bytes.
+#      Invoke-WebRequest auto-decodes the body to a string using the
+#      response's charset (or ISO-8859-1 when none is declared). Round-
+#      tripping that string back to bytes re-encoded as UTF-8, doubling
+#      every 0x80+ byte (0x83 → 0xC2 0x83). Japanese then parsed as
+#      garbage and the game showed blank profile / no songs.
+#
+#   2. Invoke-WebRequest -OutFile also opens the destination for write
+#      while the server is still reading the same file via res.sendFile,
+#      tripping "Datei wird von einem anderen Prozess verwendet" when
+#      sync runs on the same machine as asphyxia-core. Buffering to
+#      memory first sequences the two file operations — the server's
+#      read handle is closed by the time we open the destination.
+try {
+    $xmlUrl = "$ServerUrl/api/nautica/music-db-xml"
+    $xmlPath = Join-Path $xmlDir "music_db.merged.xml"
+    $client = [System.Net.WebClient]::new()
     try {
-        $xmlUrl = "$ServerUrl/api/nautica/music-db-xml"
-        $xmlPath = Join-Path $xmlDir "music_db.merged.xml"
-        $resp = Invoke-WebRequest -Uri $xmlUrl -TimeoutSec 30 -UseBasicParsing
-        $bytes = $resp.Content
-        if ($bytes -is [string]) {
-            $enc = [System.Text.Encoding]::UTF8
-            try { if ($resp.Headers['Content-Type'] -match 'charset=([^ ;]+)') {
-                $enc = [System.Text.Encoding]::GetEncoding($matches[1])
-            } } catch {}
-            $bytes = $enc.GetBytes($bytes)
-        }
-        [System.IO.File]::WriteAllBytes($xmlPath, $bytes)
-        Write-Host "  Refreshed music_db.merged.xml" -ForegroundColor Green
+        $bytes = $client.DownloadData($xmlUrl)
+    } finally {
+        $client.Dispose()
+    }
+    [System.IO.File]::WriteAllBytes($xmlPath, $bytes)
+    Write-Host ("  Refreshed music_db.merged.xml ({0} bytes)" -f $bytes.Length) -ForegroundColor Green
+} catch {
+    $reason = $_.Exception.Message
+    $status = $null
+    try { $status = $_.Exception.Response.StatusCode.value__ } catch {}
+    Write-Host ("  Could not refresh music_db.merged.xml from {0}: {1}{2}" -f `
+        $xmlUrl, $reason, $(if ($status) { " (HTTP $status)" } else { "" })) -ForegroundColor Yellow
+    Write-Host "  (game may still work if the existing one is close enough)" -ForegroundColor DarkYellow
+}
+
+# Step 7b: Nuke LayeredFS merge cache. Normally LayeredFS notices the
+# source XML changed via its .hashed file and rebuilds on next launch,
+# but we've observed stale caches persisting in edge cases. Deleting
+# the cache dir forces a clean re-merge with the new content.
+$cacheDir = Join-Path (Split-Path $customDir -Parent) "_cache"
+if (Test-Path $cacheDir) {
+    try {
+        Remove-Item -Path $cacheDir -Recurse -Force -ErrorAction Stop
+        Write-Host "  Cleared LayeredFS cache" -ForegroundColor Green
     } catch {
-        $reason = $_.Exception.Message
-        $status = $null
-        try { $status = $_.Exception.Response.StatusCode.value__ } catch {}
-        Write-Host ("  Could not refresh music_db.merged.xml from {0}: {1}{2}" -f `
-            $xmlUrl, $reason, $(if ($status) { " (HTTP $status)" } else { "" })) -ForegroundColor Yellow
-        Write-Host "  (game may still work if the existing one is close enough)" -ForegroundColor DarkYellow
+        Write-Host ("  Could not clear LayeredFS cache: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
     }
+}
 
-    # Step 7b: Nuke LayeredFS merge cache. Normally LayeredFS notices the
-    # source XML changed via its .hashed file and rebuilds on next launch,
-    # but we've observed stale caches persisting in edge cases. Deleting
-    # the cache dir forces a clean re-merge with the new content.
-    $cacheDir = Join-Path (Split-Path $customDir -Parent) "_cache"
-    if (Test-Path $cacheDir) {
-        try {
-            Remove-Item -Path $cacheDir -Recurse -Force -ErrorAction Stop
-            Write-Host "  Cleared LayeredFS cache" -ForegroundColor Green
-        } catch {
-            Write-Host ("  Could not clear LayeredFS cache: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
-        }
-    }
+# Step 8: Persist state
+$stateObj = @{}
+foreach ($k in $localState.Keys) { $stateObj["$k"] = $localState[$k] }
+$stateObj | ConvertTo-Json -Depth 2 | Set-Content -Path $stateFile -Encoding UTF8
 
-    # Step 8: Persist state
-    $stateObj = @{}
-    foreach ($k in $localState.Keys) { $stateObj["$k"] = $localState[$k] }
-    $stateObj | ConvertTo-Json -Depth 2 | Set-Content -Path $stateFile -Encoding UTF8
-
+if ($anyWork) {
     Write-Host ""
     Write-Host ("Sync done: {0} downloaded, {1} deleted, {2} failed" -f $ok, $toDelete.Count, $failed) -ForegroundColor Cyan
 }
