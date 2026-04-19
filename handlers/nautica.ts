@@ -6,8 +6,8 @@ import { NauticaSong } from '../models/nautica_song';
 import { NominationFeedback } from '../models/nomination_feedback';
 import { DeletedNauticaSong } from '../models/deleted_nautica_song';
 import { MusicRecord } from '../models/music_record';
-import { invalidateMusicDbCache } from '../utils';
-import { convertNauticaSong, bulkConvertNauticaSongs } from './converter';
+import { invalidateMusicDbCache, computeForce } from '../utils';
+import { convertNauticaSong, bulkConvertNauticaSongs, updateCustomMusicDb } from './converter';
 import { deleteDriveFile } from './drive';
 import { WebUISend } from '../../../src/eamuse/EamusePlugin';
 
@@ -726,6 +726,174 @@ function removeFromCustomMusicDb(musicId: number) {
     fs.writeFileSync(customDbPath, JSON.stringify(data, null, 2), 'utf8');
   } catch {}
 }
+
+// Nautica chart difficulties use 1=NOV, 2=ADV, 3=EXH, 4=INF/MXM. MusicRecord
+// types follow the SDVX slot order: 0=NOV, 1=ADV, 2=EXH, 3=INF, 4=MXM. Custom
+// charts go into the MXM slot (maximum), so Nautica 4 → type 4 (skipping 3).
+function nauticaDiffToMusicType(d: number): number {
+  if (d <= 3) return d - 1;
+  return 4;
+}
+
+// Names of the XML + JSON difficulty tags for each Nautica difficulty slot.
+// Mirrors the diffMap used by converter.updateCustomMusicDb so JSON and XML
+// stay aligned (Nautica 4 lands in the 'maximum' slot, not 'infinite').
+function nauticaDiffToTag(d: number): string | null {
+  const tags = ['novice', 'advanced', 'exhaust', 'maximum', 'maximum'];
+  const idx = d - 1;
+  return idx >= 0 && idx < tags.length ? tags[idx] : null;
+}
+
+// Patch the <difnum> under the matching difficulty block of a music entry in
+// music_db.merged.xml. VoxCharger writes difnum as level*10 (so level 17.5 =
+// 175) to match the v7 format Konami ships; we reuse that encoding here so
+// the game renders the new level correctly after a rerate. Best-effort — if
+// the XML or entry is missing, silently skip (the JSON update is what
+// actually drives volforce computation; the XML is just for in-game display).
+function patchMergedXmlDifnum(mid: number, diffTag: string, newLevel: number, gameRoot: string, mixName: string) {
+  try {
+    const xmlPath = path.join(gameRoot, 'data_mods', mixName, 'others', 'music_db.merged.xml');
+    if (!fs.existsSync(xmlPath)) return;
+
+    let xml = fs.readFileSync(xmlPath, 'binary');
+    const entryStart = xml.indexOf(`music id="${mid}"`);
+    if (entryStart === -1) return;
+    const entryEnd = xml.indexOf('</music>', entryStart);
+    if (entryEnd === -1) return;
+
+    let entry = xml.slice(entryStart, entryEnd + 8);
+    const blockStart = entry.indexOf(`<${diffTag}>`);
+    if (blockStart === -1) return;
+    const blockEnd = entry.indexOf(`</${diffTag}>`, blockStart);
+    if (blockEnd === -1) return;
+
+    let block = entry.slice(blockStart, blockEnd);
+    // v7 difnum is level*10 (so 17.5 stored as 175, 18.3 as 183). Round to
+    // dodge binary-float residue on values like 18.1 (which stored in a
+    // JS number is 18.099999...).
+    const tenths = Math.round(newLevel * 10);
+    const replaced = block.replace(
+      /<difnum (__type="u\d+")>\d+<\/difnum>/,
+      `<difnum $1>${tenths}</difnum>`
+    );
+    if (replaced === block) return;
+
+    entry = entry.slice(0, blockStart) + replaced + entry.slice(blockEnd);
+    xml = xml.slice(0, entryStart) + entry + xml.slice(entryEnd + 8);
+    fs.writeFileSync(xmlPath, xml, 'binary');
+  } catch {}
+}
+
+// v7 level rules: integer 1–17, plus 17.5, plus 18.0–20.0 in 0.1 steps.
+// Work in tenths to dodge float-equality traps; the XML stores difnum as
+// level*10 anyway.
+function isValidV7Level(level: number): boolean {
+  if (!Number.isFinite(level)) return false;
+  const tenths = Math.round(level * 10);
+  if (Math.abs(tenths - level * 10) > 1e-6) return false;
+  if (tenths < 10 || tenths > 200) return false;
+  if (tenths <= 170) return tenths % 10 === 0;
+  if (tenths === 175) return true;
+  if (tenths < 180) return false;
+  return true;
+}
+
+export const nauticaRerate = async (
+  data: { nauticaId: string; difficulty: number; level: number },
+  send: WebUISend
+) => {
+  try {
+    if (!data.nauticaId) { send.json({ error: 'Missing nauticaId' }); return; }
+    const difficulty = Number(data.difficulty);
+    const level = Number(data.level);
+    if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 5) {
+      send.json({ error: 'Invalid difficulty (expected 1–5)' });
+      return;
+    }
+    if (!isValidV7Level(level)) {
+      send.json({ error: 'Invalid level — allowed: 1–17 whole, 17.5, or 18.0–20.0 in 0.1 steps' });
+      return;
+    }
+
+    const song = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: data.nauticaId });
+    if (!song) { send.json({ error: 'Song not found' }); return; }
+    if (!song.mid || song.mid < 1) {
+      send.json({ error: 'Song has no assigned music ID yet — wait for conversion to finish' });
+      return;
+    }
+
+    const chart = (song.charts || []).find(c => c.difficulty === difficulty);
+    if (!chart) {
+      send.json({ error: `Chart has no ${difficulty} difficulty slot` });
+      return;
+    }
+    const previousLevel = chart.level;
+    // Normalize via tenths to drop any float-residue the client may send
+    // (18.1 from a text input can round-trip into 18.099999…).
+    const normalized = Math.round(level * 10) / 10;
+    chart.level = normalized;
+
+    // Bump convertedAt so the client sync script sees the chart as
+    // "updated" and re-downloads its ZIP. The per-chart ZIP contents
+    // (audio/VOX/jackets) haven't actually changed, but the sync script
+    // only refreshes the merged music_db.xml *after* processing at least
+    // one download — bumping this timestamp is what triggers that XML
+    // refresh on the client side. Drive does not need re-upload.
+    const bumpedAt = Date.now();
+    await DB.Update<NauticaSong>(
+      { collection: 'nautica_song', nauticaId: song.nauticaId },
+      { $set: { charts: song.charts, convertedAt: bumpedAt } }
+    );
+
+    // Refresh custom_music_db.json so the web UI and volforce calculation pick
+    // up the new level on the next read. invalidateMusicDbCache() drops the
+    // in-memory cached snapshot so the very next loadMusicDb() re-reads.
+    try { updateCustomMusicDb(song); } catch (err: any) {
+      console.error(`[Nautica] Rerate: updateCustomMusicDb failed: ${err.message}`);
+    }
+    invalidateMusicDbCache();
+
+    // Patch the merged XML so the game's chart-select screen shows the new
+    // rating. Requires the game to be restarted (or the mix to be reloaded)
+    // to pick up, same as any other music_db change.
+    const gameRoot = U.GetConfig('sdvx_eg_root_dir');
+    const mixName = U.GetConfig('sdvx_custom_mix_name') || 'asphyxia_custom';
+    const diffTag = nauticaDiffToTag(difficulty);
+    if (gameRoot && diffTag) {
+      patchMergedXmlDifnum(song.mid, diffTag, normalized, gameRoot, mixName);
+    }
+
+    // Recalculate volforce on every existing score record that matches this
+    // chart. Volforce = diffLevel × (score/10M) × gradeCoef × medalCoef × 20,
+    // so a level change always shifts it unless the record has score=0.
+    // DB.Find(null, ...) sweeps across every refid; per-record DB.Update is
+    // required because each record has its own score/clear/grade.
+    const musicType = nauticaDiffToMusicType(difficulty);
+    const records = await DB.Find<MusicRecord>(null, {
+      collection: 'music',
+      mid: song.mid,
+      type: musicType,
+    });
+    let volforceUpdated = 0;
+    for (const r of (records || [])) {
+      const refid = (r as any).__refid;
+      if (!refid) continue;
+      const newForce = computeForce(normalized, r.score || 0, r.clear || 0, r.grade || 0);
+      if (newForce === r.volforce) continue;
+      await DB.Update<MusicRecord>(
+        refid,
+        { collection: 'music', mid: song.mid, type: musicType, version: r.version },
+        { $set: { volforce: newForce } }
+      );
+      volforceUpdated++;
+    }
+
+    console.log(`[Nautica] Rerated ${song.title} (mid=${song.mid}) ${diffTag}: ${previousLevel} -> ${normalized}, ${volforceUpdated} score(s) updated`);
+    send.json({ success: true, previousLevel, newLevel: normalized, volforceUpdated });
+  } catch (err: any) {
+    send.json({ error: err.message || 'Failed to rerate chart' });
+  }
+};
 
 function removeFromMergedXml(musicId: number, gameRoot: string, mixName: string) {
   try {
