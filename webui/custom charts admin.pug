@@ -36,49 +36,14 @@ div
     .card-header
       p.card-header-title
         span.icon
-          i.mdi.mdi-playlist-plus
-        | Direct Approve from Nautica
-    .card-content
-      .notification.is-info.is-light
-        p Browse charts from #[a(href="https://ksm.dev" target="_blank") Nautica (ksm.dev)] and approve them directly (bypassing the nomination pipeline).
-
-      h5.title.is-5 Browse Nautica
-      .field.is-grouped
-        .control
-          input.input.is-small#nautica-search(type="text" placeholder="Search by title, artist or effector..." style="width:300px")
-        .control
-          button.button.is-small#admin-prev-btn
-            span.icon.is-small
-              i.mdi.mdi-chevron-left
-        .control
-          input.input.is-small#admin-page-input(type="number" min="1" value="1" style="width:70px;text-align:center")
-        .control
-          span.is-size-7#admin-page-total(style="line-height:30px") / 1
-        .control
-          button.button.is-small#admin-next-btn
-            span.icon.is-small
-              i.mdi.mdi-chevron-right
-        .control(style="margin-left:auto")
-          span.is-size-7(style="line-height:30px") Powered by #[a(href="https://ksm.dev" target="_blank") ksm.dev]
-      p.help
-        span.icon.is-small(style="vertical-align:middle")
-          i.mdi.mdi-information-outline
-        |  Tip: use #[code level:13] or #[code levels:13,14,15] to filter by chart level.
-
-      #nautica-results
-
-  .card.mt-5
-    .card-header
-      p.card-header-title
-        span.icon
           i.mdi.mdi-check-all
         | Curated Charts
     .card-content
       .buttons.are-small.mb-3
-        button.button.is-warning#bulk-reconvert-btn(title="Re-run VoxCharger on every ready/error chart. Re-downloads source ZIPs and overwrites converted files.")
+        button.button.is-warning#bulk-reconvert-btn(title="Re-run conversion on every ready/error chart. Re-downloads source ZIPs and overwrites converted files.")
           span.icon
             i.mdi.mdi-refresh
-          span Reconvert All (VoxCharger)
+          span Reconvert All
         button.button.is-info#curated-export-btn(title="Download the full curated chart list as JSON so it can be re-imported on another server.")
           span.icon
             i.mdi.mdi-download
@@ -88,6 +53,11 @@ div
             i.mdi.mdi-upload
           span Import List
         input#curated-import-file(type="file" accept=".json,application/json" style="display:none")
+      .field.mb-3
+        .control.has-icons-left
+          input.input.is-small#curated-search(type="text" placeholder="Filter by title, artist, ID…" style="max-width:360px")
+          span.icon.is-small.is-left
+            i.mdi.mdi-magnify
       #curated-list
         p.has-text-grey Loading curated charts...
 
