@@ -408,27 +408,30 @@ async function executeConversion(prepared: PreparedSong): Promise<void> {
 }
 
 // Nautica's CDN URLs embed the chart title verbatim in the filename segment
-// (e.g. `.../UUID-Annihilation in F# Minor.zip`). Characters that are special
-// in URL syntax — `#` (fragment), `@` (userinfo), `$`, spaces, non-ASCII —
-// either get stripped by Node's URL parser or get rejected by the CDN's
-// signed-URL validation, producing 403s. Percent-encode just the final path
-// segment to keep the scheme/host/path-to-file intact while escaping anything
-// problematic in the filename itself.
+// (e.g. `.../UUID-Annihilation in F# Minor.zip`). Nautica already encodes
+// spaces as %20 but leaves `#`, `@`, `$`, and non-ASCII chars raw — so the
+// moment Node's URL parser sees the URL, `#` truncates the path (everything
+// after it becomes a "fragment" and is dropped from the request), and `@`
+// is misread as a userinfo/host separator.
+//
+// Decode first to collapse any partial encoding back to raw chars, then
+// re-encode the whole final segment uniformly. That way both the pre-
+// encoded `%20` and the raw `#` end up consistently encoded in the outgoing
+// request — DigitalOcean Spaces treats `%23` and `#` as the same object key
+// byte, so the CDN serves the same file either way.
 function sanitizeUrlForDownload(url: string): string {
   const lastSlash = url.lastIndexOf('/');
   if (lastSlash < 0) return url;
   const base = url.substring(0, lastSlash + 1);
   let filename = url.substring(lastSlash + 1);
-  // Strip any existing fragment the server might have accidentally appended
-  // past the filename — those would have been dropped by Node's URL parser
-  // anyway.
-  const hashIdx = filename.indexOf('#');
-  if (hashIdx >= 0) filename = filename.substring(0, hashIdx);
-  // If the filename already looks percent-encoded (contains `%XX` sequences)
-  // don't double-encode it. Detection is coarse on purpose: any '%' followed
-  // by two hex digits anywhere counts as "already encoded".
-  if (/%[0-9A-Fa-f]{2}/.test(filename)) return base + filename;
-  return base + encodeURIComponent(filename);
+
+  let raw = filename;
+  try {
+    raw = decodeURIComponent(filename);
+  } catch {
+    // invalid %XX sequence — fall back to encoding the filename as-is
+  }
+  return base + encodeURIComponent(raw);
 }
 
 function downloadFile(url: string, destPath: string): Promise<void> {
