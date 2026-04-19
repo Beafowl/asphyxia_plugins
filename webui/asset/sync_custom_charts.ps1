@@ -173,27 +173,79 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
     $ok = 0
     $failed = 0
 
+    # Drive download helper. For small files, Drive streams the zip from the
+    # /uc?export=download URL directly. For files past its "large" threshold
+    # (~25 MB), Drive returns an HTML "scan for viruses" interstitial instead;
+    # the interstitial contains a <form> whose action is a different host
+    # (drive.usercontent.google.com) plus confirm= and uuid= tokens that have
+    # to be echoed back. This helper runs the download and, if the response
+    # turns out to be HTML rather than a zip, parses the interstitial, follows
+    # the form URL, and writes the zip.
+    $driveDownloader = {
+        param($url, $zipPath)
+
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -TimeoutSec 300 -UseBasicParsing
+
+        $bytes = [System.IO.File]::ReadAllBytes($zipPath) | Select-Object -First 2
+        if ($bytes.Count -ge 2 -and $bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B) {
+            return  # ZIP signature PK; we're done.
+        }
+
+        # Interstitial path. Read what we got (tiny HTML) and extract the
+        # confirm form action + the uuid + (if present) a different id.
+        $html = Get-Content -Path $zipPath -Raw -ErrorAction Stop
+        $action  = [regex]::Match($html, 'action="([^"]+)"').Groups[1].Value
+        $uuid    = [regex]::Match($html, 'name="uuid"\s+value="([^"]+)"').Groups[1].Value
+        $confirm = [regex]::Match($html, 'name="confirm"\s+value="([^"]+)"').Groups[1].Value
+        $formId  = [regex]::Match($html, 'name="id"\s+value="([^"]+)"').Groups[1].Value
+
+        if (-not $action -or -not $uuid) {
+            throw "Drive returned HTML but no confirm form (quota exhausted or permission change?)"
+        }
+
+        # Some interstitials omit id= in the form; fall back to the original URL's id.
+        if (-not $formId) {
+            $origId = [regex]::Match($url, '[?&]id=([^&]+)').Groups[1].Value
+            if ($origId) { $formId = $origId }
+        }
+
+        $qs = @()
+        if ($formId)  { $qs += "id=$formId" }
+        if ($confirm) { $qs += "confirm=$confirm" }
+        if ($uuid)    { $qs += "uuid=$uuid" }
+        $qs += 'export=download'
+        $followUrl = "$action?$([string]::Join('&', $qs))"
+
+        Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
+        Invoke-WebRequest -Uri $followUrl -OutFile $zipPath -TimeoutSec 600 -UseBasicParsing
+
+        $bytes = [System.IO.File]::ReadAllBytes($zipPath) | Select-Object -First 2
+        if (-not ($bytes.Count -ge 2 -and $bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B)) {
+            throw "Follow-up request to Drive still did not return a zip"
+        }
+    }
+
     if ($useParallel) {
         # PowerShell 7+: ForEach-Object -Parallel with a concurrency cap. Keep it
         # modest — Drive throttles aggressive concurrent requests to a single
         # account, and the 4-wide pool keeps network saturated without tripping
         # rate limits.
+        $driveDownloaderStr = $driveDownloader.ToString()
         $results = $toDownload | ForEach-Object -ThrottleLimit 4 -Parallel {
             $c = $_
             $mid = [int]$c.mid
             $idStr = "{0:D4}" -f $mid
             $zipPath = Join-Path $env:TEMP ("asphyxia_chart_{0}.zip" -f $idStr)
             $url = $c.downloadUrl
-            if ($url -like "https://drive.google.com/*" -and $url -notmatch "confirm=") { $url += "&confirm=t" }
+            # Drop any stale &confirm=t — the helper adds it itself only after
+            # parsing the interstitial, and appending it unconditionally to the
+            # /uc?export=download URL does nothing useful.
+            $url = $url -replace '&confirm=t', ''
 
-            $ProgressPreference = 'SilentlyContinue'
             try {
-                Invoke-WebRequest -Uri $url -OutFile $zipPath -TimeoutSec 180 -UseBasicParsing
-                $bytes = [System.IO.File]::ReadAllBytes($zipPath) | Select-Object -First 2
-                if ($bytes.Count -lt 2 -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
-                    if (Test-Path $zipPath) { Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue }
-                    return [pscustomobject]@{ mid=$mid; idStr=$idStr; title=$c.title; convertedAt=$c.convertedAt; zipPath=$null; error="not a zip (Drive interstitial?)" }
-                }
+                $dl = [scriptblock]::Create($using:driveDownloaderStr)
+                & $dl $url $zipPath
                 return [pscustomobject]@{ mid=$mid; idStr=$idStr; title=$c.title; convertedAt=$c.convertedAt; zipPath=$zipPath; error=$null }
             } catch {
                 if (Test-Path $zipPath) { Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue }
@@ -229,15 +281,10 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
             Write-Host ("  Downloading [{0}] {1}..." -f $idStr, $c.title) -NoNewline
 
             $zipPath = Join-Path $env:TEMP ("asphyxia_chart_{0}.zip" -f $idStr)
-            $url = $c.downloadUrl
-            if ($url -like "https://drive.google.com/*" -and $url -notmatch "confirm=") { $url += "&confirm=t" }
+            $url = $c.downloadUrl -replace '&confirm=t', ''
 
             try {
-                Invoke-WebRequest -Uri $url -OutFile $zipPath -TimeoutSec 180 -UseBasicParsing
-                $bytes = [System.IO.File]::ReadAllBytes($zipPath) | Select-Object -First 2
-                if ($bytes.Count -lt 2 -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
-                    throw "Downloaded file is not a zip (Drive may have returned an HTML interstitial)."
-                }
+                & $driveDownloader $url $zipPath
                 Expand-Archive -Path $zipPath -DestinationPath $customDir -Force
                 Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
                 $localState[$mid] = [long]$c.convertedAt
