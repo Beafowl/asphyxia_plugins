@@ -531,7 +531,7 @@ function sanitizeAscii(title: string): string {
     .toLowerCase() || 'custom';
 }
 
-export function updateCustomMusicDb(song: NauticaSong): void {
+function updateCustomMusicDb(song: NauticaSong): void {
   // Absolute path via IO.Resolve — using a relative 'plugins/...' string broke
   // when node was started from dist/ (cwd = dist/, so writes landed in
   // dist/plugins/... and the real webui asset never got updated).

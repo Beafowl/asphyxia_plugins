@@ -131,10 +131,8 @@ foreach ($mid in $installedMids.Keys) {
     }
 }
 
-$anyWork = ($toDownload.Count -gt 0) -or ($toDelete.Count -gt 0)
-
-if (-not $anyWork) {
-    Write-Host "Already up to date (checking merged XML anyway in case of rerates)." -ForegroundColor Green
+if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
+    Write-Host "Already up to date." -ForegroundColor Green
 } else {
     Write-Host ""
     Write-Host ("Plan: {0} new/updated, {1} to delete" -f $toDownload.Count, $toDelete.Count) -ForegroundColor Cyan
@@ -300,43 +298,36 @@ if (-not $anyWork) {
         }
     }
     $ProgressPreference = 'Continue'
-}
 
-# Steps 7+ run unconditionally. Rerates change only the server-side merged
-# XML — no per-chart ZIP gets regenerated — so even a "nothing to download"
-# sync needs to refresh the XML, nuke the LayeredFS cache, and re-persist
-# state to pick up any catalog-level updates.
-
-# Step 7: Refresh merged XML (reflects the current server-side set of charts)
-try {
-    $xmlUrl = "$ServerUrl/api/nautica/music-db-xml"
-    $xmlPath = Join-Path $xmlDir "music_db.merged.xml"
-    Invoke-WebRequest -Uri $xmlUrl -OutFile $xmlPath -TimeoutSec 30 -UseBasicParsing
-    Write-Host "  Refreshed music_db.merged.xml" -ForegroundColor Green
-} catch {
-    Write-Host "  Could not refresh music_db.merged.xml (game may still work if the existing one is close enough)" -ForegroundColor Yellow
-}
-
-# Step 7b: Nuke LayeredFS merge cache. Normally LayeredFS notices the
-# source XML changed via its .hashed file and rebuilds on next launch,
-# but we've observed stale caches persisting in edge cases. Deleting
-# the cache dir forces a clean re-merge with the new content.
-$cacheDir = Join-Path (Split-Path $customDir -Parent) "_cache"
-if (Test-Path $cacheDir) {
+    # Step 7: Refresh merged XML (reflects the current server-side set of charts)
     try {
-        Remove-Item -Path $cacheDir -Recurse -Force -ErrorAction Stop
-        Write-Host "  Cleared LayeredFS cache" -ForegroundColor Green
+        $xmlUrl = "$ServerUrl/api/nautica/music-db-xml"
+        $xmlPath = Join-Path $xmlDir "music_db.merged.xml"
+        Invoke-WebRequest -Uri $xmlUrl -OutFile $xmlPath -TimeoutSec 30 -UseBasicParsing
+        Write-Host "  Refreshed music_db.merged.xml" -ForegroundColor Green
     } catch {
-        Write-Host ("  Could not clear LayeredFS cache: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        Write-Host "  Could not refresh music_db.merged.xml (game may still work if the existing one is close enough)" -ForegroundColor Yellow
     }
-}
 
-# Step 8: Persist state
-$stateObj = @{}
-foreach ($k in $localState.Keys) { $stateObj["$k"] = $localState[$k] }
-$stateObj | ConvertTo-Json -Depth 2 | Set-Content -Path $stateFile -Encoding UTF8
+    # Step 7b: Nuke LayeredFS merge cache. Normally LayeredFS notices the
+    # source XML changed via its .hashed file and rebuilds on next launch,
+    # but we've observed stale caches persisting in edge cases. Deleting
+    # the cache dir forces a clean re-merge with the new content.
+    $cacheDir = Join-Path (Split-Path $customDir -Parent) "_cache"
+    if (Test-Path $cacheDir) {
+        try {
+            Remove-Item -Path $cacheDir -Recurse -Force -ErrorAction Stop
+            Write-Host "  Cleared LayeredFS cache" -ForegroundColor Green
+        } catch {
+            Write-Host ("  Could not clear LayeredFS cache: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        }
+    }
 
-if ($anyWork) {
+    # Step 8: Persist state
+    $stateObj = @{}
+    foreach ($k in $localState.Keys) { $stateObj["$k"] = $localState[$k] }
+    $stateObj | ConvertTo-Json -Depth 2 | Set-Content -Path $stateFile -Encoding UTF8
+
     Write-Host ""
     Write-Host ("Sync done: {0} downloaded, {1} deleted, {2} failed" -f $ok, $toDelete.Count, $failed) -ForegroundColor Cyan
 }
