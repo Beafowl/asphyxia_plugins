@@ -181,11 +181,15 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
     # to be echoed back. This helper runs the download and, if the response
     # turns out to be HTML rather than a zip, parses the interstitial, follows
     # the form URL, and writes the zip.
+    #
+    # Uses a shared WebSession across both requests so cookies Drive sets on
+    # the initial response survive into the follow-up — without that, Drive
+    # re-serves the interstitial instead of the zip.
     $driveDownloader = {
         param($url, $zipPath)
 
         $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest -Uri $url -OutFile $zipPath -TimeoutSec 300 -UseBasicParsing
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -TimeoutSec 300 -UseBasicParsing -SessionVariable driveSession
 
         $bytes = [System.IO.File]::ReadAllBytes($zipPath) | Select-Object -First 2
         if ($bytes.Count -ge 2 -and $bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B) {
@@ -195,13 +199,50 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
         # Interstitial path. Read what we got (tiny HTML) and extract the
         # confirm form action + the uuid + (if present) a different id.
         $html = Get-Content -Path $zipPath -Raw -ErrorAction Stop
-        $action  = [regex]::Match($html, 'action="([^"]+)"').Groups[1].Value
-        $uuid    = [regex]::Match($html, 'name="uuid"\s+value="([^"]+)"').Groups[1].Value
-        $confirm = [regex]::Match($html, 'name="confirm"\s+value="([^"]+)"').Groups[1].Value
-        $formId  = [regex]::Match($html, 'name="id"\s+value="([^"]+)"').Groups[1].Value
 
-        if (-not $action -or -not $uuid) {
-            throw "Drive returned HTML but no confirm form (quota exhausted or permission change?)"
+        # Pick the <form> whose action points at drive.usercontent.google.com
+        # /download, NOT the first action="..." on the page — Drive's shell
+        # layout contains unrelated forms (search, account UI, etc.) whose
+        # action attributes match earlier and yield a relative path like
+        # "/something" that fails URI parsing downstream with "Ungültiger URI:
+        # Der Hostname konnte nicht analysiert werden".
+        $formAction = ''
+        $actionMatches = [regex]::Matches($html, 'action="([^"]+)"')
+        foreach ($m in $actionMatches) {
+            $candidate = $m.Groups[1].Value
+            if ($candidate -match 'drive\.usercontent\.google\.com|drive\.google\.com.*download') {
+                $formAction = $candidate
+                break
+            }
+        }
+        if (-not $formAction) {
+            $formAction = 'https://drive.usercontent.google.com/download'
+        }
+
+        # Decode HTML entities Drive emits inside attribute values. &amp;
+        # inside the action URL turns it into an invalid URI once you try
+        # to append a second query string.
+        $formAction = [System.Net.WebUtility]::HtmlDecode($formAction)
+
+        # Tolerate both attribute orderings and various whitespace.
+        $extract = {
+            param($field, $html)
+            $p1 = 'name="{0}"\s+value="([^"]+)"' -f [regex]::Escape($field)
+            $p2 = 'value="([^"]+)"\s+name="{0}"' -f [regex]::Escape($field)
+            $m = [regex]::Match($html, $p1)
+            if ($m.Success) { return $m.Groups[1].Value }
+            $m = [regex]::Match($html, $p2)
+            if ($m.Success) { return $m.Groups[1].Value }
+            return ''
+        }
+        $uuid    = & $extract 'uuid'    $html
+        $confirm = & $extract 'confirm' $html
+        $formId  = & $extract 'id'      $html
+
+        if (-not $uuid -and -not $confirm) {
+            $dumpPath = $zipPath -replace '\.zip$', '.interstitial.html'
+            try { Move-Item -Path $zipPath -Destination $dumpPath -Force -ErrorAction SilentlyContinue } catch {}
+            throw "Drive returned HTML but no confirm/uuid form fields (quota exhausted, permission change, or new interstitial format). Raw HTML saved to $dumpPath"
         }
 
         # Some interstitials omit id= in the form; fall back to the original URL's id.
@@ -215,14 +256,23 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
         if ($confirm) { $qs += "confirm=$confirm" }
         if ($uuid)    { $qs += "uuid=$uuid" }
         $qs += 'export=download'
-        $followUrl = "$action?$([string]::Join('&', $qs))"
+        # Concat, not string-interpolate: PowerShell 7 can swallow "$var?"
+        # (the "?" triggers null-conditional tokenization mid-expansion) and
+        # drop the action prefix, producing "id=...&export=download" with
+        # no scheme — which then fails .NET URI parsing.
+        $joined = [string]::Join('&', $qs)
+        $followUrl = $formAction + '?' + $joined
+
+        try { [void][System.Uri]::new($followUrl) } catch {
+            throw "Constructed follow-up URL is not a valid URI: '$followUrl' (originalAction='$formAction'). Parse error: $($_.Exception.Message)"
+        }
 
         Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
-        Invoke-WebRequest -Uri $followUrl -OutFile $zipPath -TimeoutSec 600 -UseBasicParsing
+        Invoke-WebRequest -Uri $followUrl -OutFile $zipPath -TimeoutSec 600 -UseBasicParsing -WebSession $driveSession
 
         $bytes = [System.IO.File]::ReadAllBytes($zipPath) | Select-Object -First 2
         if (-not ($bytes.Count -ge 2 -and $bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B)) {
-            throw "Follow-up request to Drive still did not return a zip"
+            throw "Follow-up request to Drive still did not return a zip (session cookies may have expired or Drive served a second interstitial)"
         }
     }
 
@@ -300,13 +350,36 @@ if ($toDownload.Count -eq 0 -and $toDelete.Count -eq 0) {
     $ProgressPreference = 'Continue'
 
     # Step 7: Refresh merged XML (reflects the current server-side set of charts)
+    #
+    # Buffer the response to memory, then write to disk. With -OutFile the
+    # client opens the destination path for write while the server is still
+    # reading the same file via res.sendFile, which on Windows trips "Der
+    # Prozess kann nicht auf die Datei zugreifen, da sie von einem anderen
+    # Prozess verwendet wird" whenever the sync runs on the same machine as
+    # the asphyxia-core server. Buffering sequences the two file operations —
+    # the server's read handle is closed by the time we open the
+    # destination for write.
     try {
         $xmlUrl = "$ServerUrl/api/nautica/music-db-xml"
         $xmlPath = Join-Path $xmlDir "music_db.merged.xml"
-        Invoke-WebRequest -Uri $xmlUrl -OutFile $xmlPath -TimeoutSec 30 -UseBasicParsing
+        $resp = Invoke-WebRequest -Uri $xmlUrl -TimeoutSec 30 -UseBasicParsing
+        $bytes = $resp.Content
+        if ($bytes -is [string]) {
+            $enc = [System.Text.Encoding]::UTF8
+            try { if ($resp.Headers['Content-Type'] -match 'charset=([^ ;]+)') {
+                $enc = [System.Text.Encoding]::GetEncoding($matches[1])
+            } } catch {}
+            $bytes = $enc.GetBytes($bytes)
+        }
+        [System.IO.File]::WriteAllBytes($xmlPath, $bytes)
         Write-Host "  Refreshed music_db.merged.xml" -ForegroundColor Green
     } catch {
-        Write-Host "  Could not refresh music_db.merged.xml (game may still work if the existing one is close enough)" -ForegroundColor Yellow
+        $reason = $_.Exception.Message
+        $status = $null
+        try { $status = $_.Exception.Response.StatusCode.value__ } catch {}
+        Write-Host ("  Could not refresh music_db.merged.xml from {0}: {1}{2}" -f `
+            $xmlUrl, $reason, $(if ($status) { " (HTTP $status)" } else { "" })) -ForegroundColor Yellow
+        Write-Host "  (game may still work if the existing one is close enough)" -ForegroundColor DarkYellow
     }
 
     # Step 7b: Nuke LayeredFS merge cache. Normally LayeredFS notices the
