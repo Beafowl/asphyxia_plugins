@@ -36,6 +36,61 @@ function loadExistingIds() {
 }
 loadExistingIds();
 
+// ─── Music ID slot banner ───────────────────────────────────────────────────
+// The game crashes with IDs >= 3072, so only ~271 custom chart slots exist.
+// Keep a live count on the admin tab so the admin sees when they're close to
+// or out of capacity. `slotsAreFull` is read by approval/import flows below to
+// short-circuit expensive work before the server rejects it.
+var slotsAreFull = false;
+
+function refreshSlotsBanner() {
+  var el = document.getElementById('nautica-slots-banner');
+  if (!el) return;
+  emit('nauticaSlotsStatus', {}).then(function (response) {
+    var result = response && response.data;
+    if (!result || result.error || !result.slots) {
+      // Leave the original static message in place if the fetch failed.
+      return;
+    }
+    renderSlotsBanner(result.slots);
+  });
+}
+
+function renderSlotsBanner(slots) {
+  var el = document.getElementById('nautica-slots-banner');
+  if (!el) return;
+
+  slotsAreFull = !!slots.full;
+
+  var severity, icon, headline;
+  if (slots.full) {
+    severity = 'is-danger';
+    icon = 'mdi-alert-octagon';
+    headline = 'No music ID slots available';
+  } else if (slots.remaining <= 20) {
+    severity = 'is-warning';
+    icon = 'mdi-alert';
+    headline = 'Only ' + slots.remaining + ' music ID slot(s) remaining';
+  } else {
+    severity = 'is-info is-light';
+    icon = 'mdi-information-outline';
+    headline = slots.used + ' / ' + slots.capacity + ' music ID slots used';
+  }
+
+  el.className = 'notification mt-5 ' + severity;
+  var body = '<p><span class="icon"><i class="mdi ' + icon + '"></i></span> ' +
+    '<strong>' + headline + '.</strong> ' +
+    'The game crashes with IDs >= 3072, so only ' + slots.capacity +
+    ' custom chart slots (' + slots.start + '–' + slots.end + ') are available. ' +
+    (slots.full
+      ? 'No new charts can be approved or reconverted until an existing chart is removed.'
+      : (slots.capacity - slots.remaining) + ' in use, ' + slots.remaining + ' free.') +
+    '</p>';
+  el.innerHTML = body;
+}
+
+refreshSlotsBanner();
+
 // ─── Nominations Queue ──────────────────────────────────────────────────────
 
 function refreshNominationQueue() {
@@ -154,6 +209,17 @@ function handleNominationAction(e) {
     var songData = JSON.parse(btn.getAttribute('data-song'));
     emit('nauticaApprove', songData).then(function (response) {
       btn.classList.remove('is-loading');
+      btn.disabled = false;
+      var result = response && response.data;
+      if (result && result.error) {
+        if (result.slotsFull) {
+          if (result.slots) renderSlotsBanner(result.slots);
+          alert(result.error);
+        } else {
+          alert(result.error);
+        }
+      }
+      refreshSlotsBanner();
       refreshNominationQueue();
       refreshCuratedList();
     });
@@ -200,11 +266,19 @@ function handleBulkNominationAction(action) {
 
     setBulkButtonsDisabled(true);
 
-    var ok = 0, failed = 0, idx = 0;
+    var ok = 0, failed = 0, idx = 0, slotsFullHit = false;
     function next() {
-      if (idx >= targets.length) {
+      if (idx >= targets.length || slotsFullHit) {
         setBulkButtonsDisabled(false);
-        if (failed > 0) alert('Done: ' + ok + ' succeeded, ' + failed + ' failed.');
+        if (slotsFullHit) {
+          var remaining = targets.length - idx;
+          alert('Bulk ' + action + ' stopped: no music ID slots remaining. ' +
+            ok + ' processed, ' + remaining + ' skipped. Remove an existing ' +
+            'custom chart before trying again.');
+        } else if (failed > 0) {
+          alert('Done: ' + ok + ' succeeded, ' + failed + ' failed.');
+        }
+        refreshSlotsBanner();
         loadExistingIds();
         refreshNominationQueue();
         refreshCuratedList();
@@ -230,7 +304,13 @@ function handleBulkNominationAction(action) {
       }
       call.then(function (resp) {
         var r = resp && resp.data;
-        if (r && r.error) failed++; else ok++;
+        if (r && r.error) {
+          failed++;
+          if (r.slotsFull) {
+            if (r.slots) renderSlotsBanner(r.slots);
+            slotsFullHit = true;
+          }
+        } else ok++;
         next();
       }).catch(function () { failed++; next(); });
     }
@@ -280,8 +360,16 @@ function setBulkButtonsDisabled(disabled) {
         return;
       }
 
+      if (result.slots) renderSlotsBanner(result.slots);
+
       if (result.count === 0) {
         alert('No charts to reconvert.');
+      } else if (result.slotsOverflow && result.slotsOverflow > 0) {
+        alert('Queued ' + result.count + ' chart(s) for reconversion, but ' +
+          result.slotsOverflow + ' of them will fail to allocate a music ID ' +
+          '(only ' + (result.slots ? result.slots.remaining : '0') + ' slot(s) free). ' +
+          'Those charts will be marked as errored — remove existing custom ' +
+          'charts to free up IDs and try again.');
       } else {
         alert('Queued ' + result.count + ' chart(s) for reconversion. Watch the Curated Charts list for status updates.');
       }
@@ -490,6 +578,7 @@ function renderCuratedList() {
         loadExistingIds();
         refreshCuratedList();
         refreshDeletedList();
+        refreshSlotsBanner();
       });
     });
   }
@@ -510,6 +599,7 @@ function renderCuratedList() {
           return;
         }
         if (result.error) {
+          if (result.slotsFull && result.slots) renderSlotsBanner(result.slots);
           alert(result.error);
           return;
         }
@@ -518,6 +608,7 @@ function renderCuratedList() {
           return;
         }
         refreshCuratedList();
+        refreshSlotsBanner();
       }).catch(function (err) {
         btn.classList.remove('is-loading');
         btn.disabled = false;

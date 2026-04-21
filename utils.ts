@@ -83,6 +83,38 @@ export function invalidateMusicDbCache() {
 export const NAUTICA_ID_START = 2800;
 export const NAUTICA_ID_END = 3071;
 
+export const NAUTICA_SLOT_EXHAUSTED_ERROR =
+  `No music ID slots available. The game crashes with IDs >= 3072, so only ` +
+  `${NAUTICA_ID_END - NAUTICA_ID_START + 1} custom chart slots (${NAUTICA_ID_START}-${NAUTICA_ID_END}) ` +
+  `exist and all are in use. Remove an existing custom chart before adding a new one.`;
+
+export type NauticaSlotsStatus = {
+  start: number;
+  end: number;
+  capacity: number;
+  used: number;
+  remaining: number;
+  full: boolean;
+};
+
+export async function getNauticaSlotsStatus(): Promise<NauticaSlotsStatus> {
+  const songs = await DB.Find<any>({
+    collection: 'nautica_song',
+    mid: { $gte: NAUTICA_ID_START, $lte: NAUTICA_ID_END },
+  });
+  const usedIds = new Set((songs || []).map((s: any) => s.mid));
+  const capacity = NAUTICA_ID_END - NAUTICA_ID_START + 1;
+  const used = usedIds.size;
+  return {
+    start: NAUTICA_ID_START,
+    end: NAUTICA_ID_END,
+    capacity,
+    used,
+    remaining: capacity - used,
+    full: used >= capacity,
+  };
+}
+
 export async function GetNextNauticaId(): Promise<number> {
   const songs = await DB.Find<any>({ collection: 'nautica_song', mid: { $gte: NAUTICA_ID_START } });
   const usedIds = new Set((songs || []).map((s: any) => s.mid));
@@ -97,7 +129,7 @@ export async function GetNextNauticaId(): Promise<number> {
     }
   }
 
-  throw new Error(`No available music ID slots (all ${NAUTICA_ID_START}-${NAUTICA_ID_END} in use)`);
+  throw new Error(NAUTICA_SLOT_EXHAUSTED_ERROR);
 }
 
 export function computeForce(diff, score, medal, grade) {

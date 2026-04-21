@@ -45,6 +45,7 @@ import {
   nauticaGetFeedback,
   nauticaSetTesting,
   nauticaReject,
+  nauticaSlotsStatus,
 } from './handlers/nautica';
 import { ARENA_STATION_ITEMS } from './data/exg';
 import { ARENA_STATION_ITEMS7 } from './data/nbl';
@@ -103,6 +104,7 @@ export function register() {
   R.WebUIEvent('nauticaGetFeedback', nauticaGetFeedback);
   R.WebUIEvent('nauticaSetTesting', nauticaSetTesting);
   R.WebUIEvent('nauticaReject', nauticaReject);
+  R.WebUIEvent('nauticaSlotsStatus', nauticaSlotsStatus);
 
   const MultiRoute = (method: string, handler: EPR | boolean) => {
     // Helper for register multiple versions.

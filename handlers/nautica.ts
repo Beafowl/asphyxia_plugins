@@ -6,7 +6,11 @@ import { NauticaSong } from '../models/nautica_song';
 import { NominationFeedback } from '../models/nomination_feedback';
 import { DeletedNauticaSong } from '../models/deleted_nautica_song';
 import { MusicRecord } from '../models/music_record';
-import { invalidateMusicDbCache } from '../utils';
+import {
+  invalidateMusicDbCache,
+  getNauticaSlotsStatus,
+  NAUTICA_SLOT_EXHAUSTED_ERROR,
+} from '../utils';
 import { convertNauticaSong, bulkConvertNauticaSongs } from './converter';
 import { deleteDriveFile } from './drive';
 import { WebUISend } from '../../../src/eamuse/EamusePlugin';
@@ -312,6 +316,18 @@ export const nauticaApprove = async (data: any, send: WebUISend) => {
 
     const existing = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: data.nauticaId });
 
+    // Approving will trigger conversion, which allocates a new music ID for any
+    // song without one. If every slot is already used, fail loudly now instead
+    // of silently marking the chart as errored inside prepareForConversion.
+    const willNeedNewMid = !existing || !existing.mid;
+    if (willNeedNewMid) {
+      const slots = await getNauticaSlotsStatus();
+      if (slots.full) {
+        send.json({ error: NAUTICA_SLOT_EXHAUSTED_ERROR, slotsFull: true, slots });
+        return;
+      }
+    }
+
     // Approving an existing nomination
     if (existing && (existing.status === 'nominated' || existing.status === 'testing')) {
       await DB.Update<NauticaSong>(
@@ -570,9 +586,17 @@ export const nauticaReconvert = async (data: { nauticaId: string }, send: WebUIS
       send.json({ error: `Cannot reconvert a ${song.status} chart` });
       return;
     }
-    // mid === 0 is fine — it means this chart was approved but first-time
-    // conversion never completed. prepareForConversion allocates a fresh
-    // mid via GetNextNauticaId() when it's zero.
+    // mid === 0 means this chart was approved but first-time conversion never
+    // completed — prepareForConversion allocates a fresh mid via
+    // GetNextNauticaId(). Fail early if no slot is available, otherwise the
+    // reconversion silently marks the chart as errored.
+    if (!song.mid) {
+      const slots = await getNauticaSlotsStatus();
+      if (slots.full) {
+        send.json({ error: NAUTICA_SLOT_EXHAUSTED_ERROR, slotsFull: true, slots });
+        return;
+      }
+    }
 
     await DB.Update<NauticaSong>(
       { collection: 'nautica_song', nauticaId: data.nauticaId },
@@ -585,6 +609,18 @@ export const nauticaReconvert = async (data: { nauticaId: string }, send: WebUIS
     send.json({ success: true });
   } catch (err: any) {
     send.json({ error: err.message || 'Failed to queue reconversion' });
+  }
+};
+
+// Lightweight WebUI endpoint for the admin tab to poll slot usage. Used to
+// render the remaining-slots banner and to disable approve/import buttons
+// client-side when capacity is exhausted.
+export const nauticaSlotsStatus = async (_data: any, send: WebUISend) => {
+  try {
+    const slots = await getNauticaSlotsStatus();
+    send.json({ success: true, slots });
+  } catch (err: any) {
+    send.json({ error: err.message || 'Failed to fetch slot status' });
   }
 };
 
@@ -614,6 +650,14 @@ export const nauticaReconvertAll = async (data: any, send: WebUISend) => {
       );
     }
 
+    // Each mid===0 song consumes a fresh slot when it reaches
+    // prepareForConversion. If the batch wants more new slots than remain,
+    // flag the response so the UI can warn — we still fire the job so songs
+    // that already have mids convert fine; only the overflow entries fail.
+    const needSlot = toReconvert.filter((s: any) => !s.mid).length;
+    const slots = await getNauticaSlotsStatus();
+    const overflow = Math.max(0, needSlot - slots.remaining);
+
     // Fire-and-forget: the bulk runner invokes VoxCharger once with a manifest
     // of every target chart instead of calling it N times. Dramatically
     // faster than per-chart conversion (one .exe startup, one DB save,
@@ -622,7 +666,13 @@ export const nauticaReconvertAll = async (data: any, send: WebUISend) => {
       console.error(`[Nautica] Bulk reconvert failed: ${err.message}`);
     });
 
-    send.json({ success: true, count: toReconvert.length });
+    send.json({
+      success: true,
+      count: toReconvert.length,
+      needSlot,
+      slots,
+      slotsOverflow: overflow,
+    });
   } catch (err: any) {
     send.json({ error: err.message || 'Failed to queue reconversion' });
   }
