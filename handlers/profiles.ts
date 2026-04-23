@@ -142,7 +142,10 @@ export const loadScore: EPR = async (info, data, send) => {
 
 export const saveScore: EPR = async (info, data, send) => {
   const refid = $(data).str('refid', $(data).attr().dataid);
-  if (!refid) return send.deny();
+  if (!refid) {
+    console.warn('saveScore rejected: missing refid (model=' + info.model + ')');
+    return send.deny();
+  }
 
   const version = getVersion(info);
   const dVersion = parseInt(info.model.split(':')[4].slice(0, -2));
@@ -155,13 +158,42 @@ export const saveScore: EPR = async (info, data, send) => {
     // Using alternate scoring system after 20210831
     await loadMusicDb(); // Ensure music DB is loaded for MID validation
     const tracks = $(data).elements('track');
+    let saved = 0;
+    let skippedInvalidMid = 0;
     for (const i of tracks) {
       const mid = i.number('music_id');
       const type = i.number('music_type');
-      if (_.isNil(mid) || _.isNil(type)) return send.deny();
+      if (_.isNil(mid) || _.isNil(type)) {
+        console.warn(
+          'saveScore rejected: track missing music_id/music_type (refid=' +
+            refid +
+            ', version=' +
+            version +
+            ', mid=' +
+            mid +
+            ', type=' +
+            type +
+            ')'
+        );
+        return send.deny();
+      }
 
       // Skip scores for songs not in music database
-      if (!isValidMid(mid)) continue;
+      if (!isValidMid(mid)) {
+        console.warn(
+          'saveScore skipped track: mid not in music DB (refid=' +
+            refid +
+            ', version=' +
+            version +
+            ', mid=' +
+            mid +
+            ', type=' +
+            type +
+            ')'
+        );
+        skippedInvalidMid++;
+        continue;
+      }
 
       const record = (await DB.FindOne<MusicRecord>(refid, {
         collection: 'music',
@@ -223,7 +255,21 @@ export const saveScore: EPR = async (info, data, send) => {
         { collection: 'music', mid, type, version: Math.abs(version) },
         record
       );
+      saved++;
     }
+
+    console.log(
+      'saveScore: refid=' +
+        refid +
+        ' version=' +
+        version +
+        ' tracks=' +
+        tracks.length +
+        ' saved=' +
+        saved +
+        ' skippedInvalidMid=' +
+        skippedInvalidMid
+    );
 
     // Auto-export to Tachi (fire-and-forget)
     tachiAutoExport(refid, Math.abs(version), tracks).catch(err => {
@@ -232,6 +278,16 @@ export const saveScore: EPR = async (info, data, send) => {
 
     return send.success();
   }
+
+  console.warn(
+    'saveScore not processed: unsupported version (refid=' +
+      refid +
+      ', version=' +
+      version +
+      ', model=' +
+      info.model +
+      ')'
+  );
 };
 
 // Tachi clear type → lamp mappings (server-side mirrors of frontend constants)
