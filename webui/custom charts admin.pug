@@ -1,4 +1,15 @@
+//DATA//
+  configuredStartRaw: U.GetConfig('sdvx_nautica_id_start')
+
 -
+  const NAUTICA_ID_END = 3071;
+  const NAUTICA_ID_START_DEFAULT = 2800;
+  const parsedStart = parseInt(String(configuredStartRaw || ''), 10);
+  const nauticaIdStart = (Number.isFinite(parsedStart) && parsedStart >= 1 && parsedStart < NAUTICA_ID_END)
+    ? parsedStart
+    : NAUTICA_ID_START_DEFAULT;
+  const nauticaCapacity = NAUTICA_ID_END - nauticaIdStart + 1;
+
 link(rel="stylesheet" href="static/asset/css/datatables.css")
 link(rel="stylesheet" href="static/asset/css/customcharts.css")
 div
@@ -28,9 +39,13 @@ div
   #nautica-slots-banner.notification.is-warning.is-light.mt-5
     p
       strong Music ID limit:
-      |  The game crashes with IDs >= 3072. Custom charts are assigned IDs starting at 2800, giving a maximum of
-      strong  271
-      |  custom charts. If you need more slots, use a lower starting ID in the plugin config.
+      |  The game crashes with IDs >= 3072. Custom charts are assigned IDs starting at
+      strong= nauticaIdStart
+      | , giving a maximum of
+      strong= nauticaCapacity
+      |  custom charts. To change this, set
+      code sdvx_nautica_id_start
+      |  in the plugin config — the lower the value, the more slots (but don't go below the highest official song ID you care about, typically ~1900).
 
   .card.mt-5
     .card-header

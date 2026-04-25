@@ -9,7 +9,7 @@ import { MusicRecord } from '../models/music_record';
 import {
   invalidateMusicDbCache,
   getNauticaSlotsStatus,
-  NAUTICA_SLOT_EXHAUSTED_ERROR,
+  nauticaSlotExhaustedError,
 } from '../utils';
 import { convertNauticaSong, bulkConvertNauticaSongs } from './converter';
 import { deleteDriveFile } from './drive';
@@ -323,7 +323,7 @@ export const nauticaApprove = async (data: any, send: WebUISend) => {
     if (willNeedNewMid) {
       const slots = await getNauticaSlotsStatus();
       if (slots.full) {
-        send.json({ error: NAUTICA_SLOT_EXHAUSTED_ERROR, slotsFull: true, slots });
+        send.json({ error: nauticaSlotExhaustedError(), slotsFull: true, slots });
         return;
       }
     }
@@ -593,7 +593,7 @@ export const nauticaReconvert = async (data: { nauticaId: string }, send: WebUIS
     if (!song.mid) {
       const slots = await getNauticaSlotsStatus();
       if (slots.full) {
-        send.json({ error: NAUTICA_SLOT_EXHAUSTED_ERROR, slotsFull: true, slots });
+        send.json({ error: nauticaSlotExhaustedError(), slotsFull: true, slots });
         return;
       }
     }
