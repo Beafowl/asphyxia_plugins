@@ -55,6 +55,33 @@ div
           li After syncing, the game launches normally. Custom charts appear in the song list.
           li On subsequent launches, the script only downloads if new charts are available — otherwise it starts instantly.
 
+        hr
+
+        h4 Running your own server (admins)
+        p
+          | If you want to mirror this server's curated chart list on a
+          |  fresh asphyxia install, the chart converter (#[strong VoxCharger])
+          |  is what turns Nautica/KSM downloads into the #[code .vox] /
+          |  #[code .2dx] files the game actually loads. You can grab the
+          |  exact build this server was tested with below.
+        .field(style="margin-top:1rem;margin-bottom:1rem")
+          a.button.is-success(href="/api/voxcharger/download")
+            span.icon
+              i.mdi.mdi-download
+            span Download VoxCharger.exe
+        .notification.is-info.is-light(style="margin-top:1rem")
+          p
+            strong You probably don't need to convert each chart yourself.
+          p(style="margin-top:0.5rem")
+            | Use #[strong Export List] on the Custom Charts tab to dump
+            |  every curated chart on this server (with its ksm.dev source
+            |  URL) into a single JSON file. On the new server, click
+            |  #[strong Import List] and pick that JSON: every entry lands
+            |  as #[code pending], then a single #[strong Reconvert All] on
+            |  the Custom Charts Admin page rebuilds them all from the
+            |  stored URLs. No per-chart manual work, and no need to copy
+            |  multi-gigabyte #[code data_mods/] folders across machines.
+
         div(style="margin-top:2rem")
           a.button.is-link(href="/plugin/sdvx@asphyxia/custom%20charts")
             span.icon

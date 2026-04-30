@@ -382,94 +382,9 @@ function setBulkButtonsDisabled(disabled) {
   });
 })();
 
-// ─── Curated Charts Import / Export ────────────────────────────────────────
-
-(function () {
-  var exportBtn = document.getElementById('curated-export-btn');
-  if (exportBtn) {
-    exportBtn.addEventListener('click', function () {
-      exportBtn.disabled = true;
-      exportBtn.classList.add('is-loading');
-      emit('nauticaExportList', {}).then(function (response) {
-        exportBtn.disabled = false;
-        exportBtn.classList.remove('is-loading');
-        var result = response && response.data;
-        if (!result || result.error) {
-          alert((result && result.error) || 'Export failed.');
-          return;
-        }
-        // Trigger browser download
-        var blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        var d = new Date(result.exportedAt || Date.now());
-        var stamp = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') +
-                    '_' + String(d.getHours()).padStart(2,'0') + String(d.getMinutes()).padStart(2,'0');
-        a.href = url;
-        a.download = 'asphyxia-curated-' + stamp + '.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-      }).catch(function () {
-        exportBtn.disabled = false;
-        exportBtn.classList.remove('is-loading');
-        alert('Export failed.');
-      });
-    });
-  }
-
-  var importBtn = document.getElementById('curated-import-btn');
-  var importInput = document.getElementById('curated-import-file');
-  if (importBtn && importInput) {
-    importBtn.addEventListener('click', function () { importInput.click(); });
-
-    importInput.addEventListener('change', function () {
-      var file = importInput.files && importInput.files[0];
-      importInput.value = ''; // allow re-selecting the same file
-      if (!file) return;
-
-      var reader = new FileReader();
-      reader.onload = function () {
-        var payload;
-        try { payload = JSON.parse(reader.result); }
-        catch (e) { alert('Could not parse file as JSON: ' + e.message); return; }
-
-        if (!payload || !Array.isArray(payload.songs)) {
-          alert('File does not look like an exported curated-chart list (missing "songs" array).');
-          return;
-        }
-        if (!confirm('Import ' + payload.songs.length + ' chart entr(ies)? Existing charts with the same nauticaId will be left untouched. New entries land as "pending" and need Reconvert All to actually build audio.')) {
-          return;
-        }
-
-        importBtn.disabled = true;
-        importBtn.classList.add('is-loading');
-        emit('nauticaImportList', { songs: payload.songs }).then(function (response) {
-          importBtn.disabled = false;
-          importBtn.classList.remove('is-loading');
-          var result = response && response.data;
-          if (!result || result.error) {
-            alert((result && result.error) || 'Import failed.');
-            return;
-          }
-          alert('Import done: ' + result.added + ' new, ' +
-                result.skippedExisting + ' already existed, ' +
-                result.skippedInvalid + ' invalid.');
-          loadExistingIds();
-          refreshCuratedList();
-          refreshNominationQueue();
-        }).catch(function () {
-          importBtn.disabled = false;
-          importBtn.classList.remove('is-loading');
-          alert('Import failed.');
-        });
-      };
-      reader.onerror = function () { alert('Could not read file.'); };
-      reader.readAsText(file);
-    });
-  }
-})();
+// Curated Charts Import / Export moved to customcharts.js — those buttons
+// now live on the user-facing Custom Charts tab next to the chart list.
+// See `wireCuratedExportImport` there.
 
 // ─── Curated Charts List ────────────────────────────────────────────────────
 

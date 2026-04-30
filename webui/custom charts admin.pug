@@ -59,15 +59,13 @@ div
           span.icon
             i.mdi.mdi-refresh
           span Reconvert All
-        button.button.is-info#curated-export-btn(title="Download the full curated chart list as JSON so it can be re-imported on another server.")
-          span.icon
-            i.mdi.mdi-download
-          span Export List
-        button.button.is-info.is-light#curated-import-btn(title="Upload a previously-exported JSON. New entries are added with status 'pending'; existing charts are left untouched.")
-          span.icon
-            i.mdi.mdi-upload
-          span Import List
-        input#curated-import-file(type="file" accept=".json,application/json" style="display:none")
+      p.help.mb-3
+        span.icon.is-small(style="vertical-align:middle")
+          i.mdi.mdi-information-outline
+        |  Looking for #[strong Export List] / #[strong Import List]? They
+        |  moved next to the curated chart list on the
+        |  #[a(href="/plugin/sdvx@asphyxia/custom%20charts") Custom Charts]
+        |  tab.
       .field.mb-3
         .control.has-icons-left
           input.input.is-small#curated-search(type="text" placeholder="Filter by title, artist, ID…" style="max-width:360px")
