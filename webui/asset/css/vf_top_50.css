@@ -1,0 +1,213 @@
+/* Layout mimicking tachisdvxdata.com/nablatop50: dark neutral background,
+   three-column grid of 50 entries, large tabular score digits, clear-type
+   pill. Rajdhani for UI copy + Share Tech Mono for digits gives the clean
+   arcade/score-overlay feel the reference image uses. */
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap');
+
+.vf-top50-page .card-header-title .icon { margin-right: 0.35rem; }
+
+.vf-canvas-root {
+  background: #14171c;
+  color: #e6e8ec;
+  font-family: 'Rajdhani', 'Segoe UI', 'Arial Narrow', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 14px 16px;
+  border-radius: 4px;
+  /* Fixed width so the layout is stable in both the browser and the PNG. */
+  width: 990px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Header */
+.vf-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #2a2f38;
+}
+.vf-header-title {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 2px;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+.vf-header-playername {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #ffffff;
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+.vf-header-vf {
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 16px;
+  color: #c5d0e0;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+.vf-header-date {
+  font-size: 13px;
+  font-weight: 500;
+  color: #8a94a6;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+.vf-header-right {
+  text-align: right;
+  color: #b0bac9;
+  font-size: 12px;
+}
+.vf-header-sdvxid {
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-weight: 400;
+  font-size: 14px;
+  color: #ffffff;
+  margin-bottom: 2px;
+  letter-spacing: 1px;
+}
+.vf-header-source {
+  font-size: 11px;
+  font-weight: 500;
+  color: #8a94a6;
+  letter-spacing: 0.5px;
+}
+
+/* Grid */
+.vf-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+/* Individual entry */
+.vf-entry {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 2px 8px;
+  background: #1b1f26;
+  border: 1px solid #2a2f38;
+  border-radius: 2px;
+  padding: 6px;
+  min-height: 64px;
+  font-size: 12px;
+  align-items: center;
+}
+.vf-entry-jacket {
+  grid-row: 1 / span 2;
+  width: 56px;
+  height: 56px;
+  background: #000;
+  overflow: hidden;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vf-entry-jacket img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.vf-entry-jacket .vf-nojk {
+  color: #5a6375;
+  font-size: 10px;
+}
+.vf-entry-info {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.vf-entry-title {
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vf-entry-badges {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.vf-diff-badge {
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #fff;
+  background: #3a3a3a;
+}
+.vf-diff-nov { background: #7a4dff; }
+.vf-diff-adv { background: #e8c835; color: #000; }
+.vf-diff-exh { background: #d03030; }
+.vf-diff-mxm { background: #d0d0d0; color: #000; }
+.vf-diff-inf { background: #d040a8; }
+.vf-diff-grv { background: #c86820; }
+.vf-diff-hvn { background: #3a9cff; }
+.vf-diff-vvd { background: #ff5a8a; }
+.vf-diff-xcd { background: #4c5768; }
+.vf-diff-ult { background: #a02530; }
+.vf-clear-badge {
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #3a4050;
+  letter-spacing: 0.6px;
+}
+.vf-clear-UC   { background: #a4368a; color: #fff; }
+.vf-clear-PUC  { background: #d040a8; color: #fff; }
+.vf-clear-MXV  { background: #d0d0d0; color: #111; }
+.vf-clear-EXC  { background: #c93838; color: #fff; }
+.vf-clear-CLR  { background: #3a9ccd; color: #fff; }
+.vf-clear-FAIL { background: #555;    color: #ccc; }
+
+.vf-entry-vf {
+  grid-column: 3;
+  grid-row: 1;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 14px;
+  color: #d8e2f0;
+  letter-spacing: 0.5px;
+  justify-self: end;
+}
+
+.vf-entry-score {
+  grid-column: 2;
+  grid-row: 2;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: #ffffff;
+  white-space: nowrap;
+}
+/* Tachi-style: dim the leading zeros of the score so the meaningful digits
+   read larger. The JS wraps the non-zero tail in <span class="vf-score-tail">. */
+.vf-entry-score .vf-score-head { color: #4a5060; }
+.vf-entry-score .vf-score-tail { color: #ffffff; }
+
+.vf-entry-rank {
+  grid-column: 3;
+  grid-row: 2;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 22px;
+  color: #8e98aa;
+  letter-spacing: 1px;
+  justify-self: end;
+  align-self: end;
+}

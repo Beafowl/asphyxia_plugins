@@ -1,0 +1,49 @@
+//DATA//
+  profile: DB.Find(refid, { collection: 'profile' })
+  score_data: DB.Find(refid, { collection: 'music' })
+
+-
+  const padded = profile[0] ? _.padStart(profile[0].id.toString(), 8) : '00000000';
+  const sdvxid = `${padded.slice(0, 4)}-${padded.slice(4)}`;
+
+link(rel="stylesheet" href="static/asset/css/vf_top_50.css")
+
+div.vf-top50-page
+  .card
+    .card-header
+      p.card-header-title
+        span.icon
+          i.mdi.mdi-star
+        | VOLFORCE Top 50
+      .card-header-icon
+        .field.is-grouped
+          .control
+            .select.is-small
+              select#vf_version_select
+          .control
+            button.button.is-small.is-primary#vf_download_btn
+              span.icon
+                i.mdi.mdi-download
+              span Download PNG
+    .card-content
+      div#vf_status.notification.is-light(style="display:none")
+
+      // This node is what gets screenshotted — everything visible inside is
+      // captured. Keeping the header + grid in one container means the PNG
+      // matches exactly what the user sees on screen.
+      #vf_top50_canvas_root.vf-canvas-root
+        .vf-header
+          .vf-header-left
+            .vf-header-title ASPHYXIA ∇ VF TOP 50
+            .vf-header-playername#vf_header_playername
+            .vf-header-vf#vf_header_total_vf
+            .vf-header-date#vf_header_date
+          .vf-header-right
+            .vf-header-sdvxid#vf_header_sdvxid= sdvxid
+            .vf-header-source vftopfifty/asphyxia
+        #vf_grid.vf-grid
+
+div(hidden id='vf-profile-pass') !{JSON.stringify(profile)}
+div(hidden id='vf-score-pass') !{JSON.stringify(score_data)}
+script(src="static/asset/js/html2canvas.min.js")
+script(src="static/asset/js/vf_top_50.js")
