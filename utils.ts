@@ -95,6 +95,16 @@ export function getNauticaIdStart(): number {
   return parsed;
 }
 
+/**
+ * True for any music id in the custom-chart range. Used to gate behaviour
+ * that should differ between official and community charts — most notably
+ * VOLFORCE: scores still save normally, but the volforce contribution is
+ * forced to 0 so custom charts don't pad a player's rating.
+ */
+export function isCustomMid(mid: number): boolean {
+  return Number.isFinite(mid) && mid >= getNauticaIdStart() && mid <= NAUTICA_ID_END;
+}
+
 export function nauticaSlotExhaustedError(): string {
   const start = getNauticaIdStart();
   const capacity = NAUTICA_ID_END - start + 1;

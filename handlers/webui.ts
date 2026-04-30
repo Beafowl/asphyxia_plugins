@@ -2,7 +2,7 @@ import { Profile } from '../models/profile'
 import { MusicRecord } from '../models/music_record'
 import { ValgeneTicket } from '../models/valgene_ticket'
 import { Skill } from '../models/skill'
-import { getVersion, IDToCode, GetCounter, computeForce, loadMusicDb } from '../utils'
+import { getVersion, IDToCode, GetCounter, computeForce, loadMusicDb, isCustomMid } from '../utils'
 import { Mix } from '../models/mix'
 import { Rival } from '../models/rival'
 import { Item } from '../models/item'
@@ -623,37 +623,98 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
 
 export const getRivalScores = async (data: { rivalId: string; refid: string; version: string; }, send: WebUISend) => {
   let ver = parseInt(data.version)
-  let rival = await DB.FindOne<Rival>(data.refid, {collection: 'rival', refid: data.rivalId, version: ver})
+  // The rival entry might be missing if the page state is stale (e.g. the
+  // user opened a second tab and removed the rival there). Guard the
+  // dereferences so we surface a clean error instead of throwing.
+  let rivalEntry = await DB.FindOne<Rival>(data.refid, {collection: 'rival', refid: data.rivalId, version: ver})
+  if (!rivalEntry) {
+    send.json({ error: 'That rival is no longer in your list. Refresh the page.' })
+    return
+  }
   send.json({
     rival: await DB.FindOne<Profile>(data.rivalId, {collection: 'profile', version: ver}),
     yourScores: await DB.Find<MusicRecord>(data.refid, { collection: 'music', version: ver }),
-    rivalScores: await DB.Find<MusicRecord>(rival.refid, { collection: 'music', version: ver })
+    rivalScores: await DB.Find<MusicRecord>(rivalEntry.refid, { collection: 'music', version: ver })
   })
 }
 
+// Toggles a rival entry: if the target isn't already a rival on this
+// version, it's added; otherwise it's removed. We key the existence check
+// AND the remove on (refid + version) only — the previous code also
+// filtered by name, which goes stale if the rival profile was renamed and
+// caused the remove to silently no-op while the toggle still flipped state
+// in the UI. Returns a structured response so the frontend can render
+// success vs. error vs. a clear "already in that state" message.
 export const addRival = async (data: { rivalId: string; refid: string; version: string }, send: WebUISend) => {
+  if (!data.rivalId || !data.refid || !data.version) {
+    send.json({ success: false, error: 'Missing rivalId, refid, or version.' })
+    return
+  }
   let ver = parseInt(data.version)
+  if (!Number.isFinite(ver)) {
+    send.json({ success: false, error: 'Invalid version.' })
+    return
+  }
+  if (data.rivalId === data.refid) {
+    send.json({ success: false, error: 'You cannot add yourself as a rival.' })
+    return
+  }
+
   let you = await DB.FindOne<Profile>(data.refid, {collection: 'profile', version: ver})
   let rival = await DB.FindOne<Profile>(data.rivalId, {collection: 'profile', version: ver})
-
-  let checkMutual = (await DB.Count<Rival>(data.rivalId, {collection: 'rival', refid: data.refid, version: ver}) > 0)
-  if(await DB.Count<Rival>(data.refid, {collection: 'rival', refid: data.rivalId, version: ver}) === 0) {
-    if(checkMutual) {
-      DB.Upsert(data.rivalId, {collection: "rival", sdvxID: you.id, refid: data.refid, name: you.name, version: ver}, {$set: {mutual: checkMutual}})
-    }
-    DB.Insert(data.refid, {collection: "rival", sdvxID: rival.id, refid: data.rivalId, name: rival.name, version: ver, mutual: checkMutual})
-    send.json({
-      "msg": "Successfully added profile to rival. In order for your rivals to appear in-game, they need to add you as their rival as well."
-    })
-  } else {
-    if(checkMutual) {
-      DB.Upsert(data.rivalId, {collection: "rival", sdvxID: you.id, refid: data.refid, name: you.name, version: ver}, {$set: {"mutual": false}})
-    }
-    DB.Remove(data.refid, {collection: "rival", sdvxID: rival.id, refid: data.rivalId, name: rival.name, version: ver})
-    send.json({
-      "msg": "Successfully removed rival."
-    })
+  if (!you) {
+    send.json({ success: false, error: `Your profile for version ${ver} could not be found.` })
+    return
   }
+
+  // If the rival has no profile at this version we still allow the toggle
+  // to proceed — they may have a profile at another version, or this may
+  // be an orphan we want to clean up. We just don't have fresh metadata
+  // to stamp on the new doc.
+  let theyRivalYou = (await DB.Count<Rival>(data.rivalId, {collection: 'rival', refid: data.refid, version: ver})) > 0
+  let alreadyRival = (await DB.Count<Rival>(data.refid, {collection: 'rival', refid: data.rivalId, version: ver})) > 0
+
+  if (!alreadyRival) {
+    if (theyRivalYou) {
+      // Stamp mutuality on the OTHER side too so both rows agree.
+      DB.Upsert(data.rivalId, {collection: 'rival', refid: data.refid, version: ver}, {$set: {mutual: true, sdvxID: you.id, name: you.name}})
+    }
+    let inserted = await DB.Insert(data.refid, {
+      collection: 'rival',
+      sdvxID: rival ? rival.id : 0,
+      refid: data.rivalId,
+      name: rival ? rival.name : '',
+      version: ver,
+      mutual: theyRivalYou,
+    })
+    if (!inserted) {
+      send.json({ success: false, error: 'Failed to add the rival entry to the database.' })
+      return
+    }
+    send.json({
+      success: true,
+      action: 'added',
+      msg: 'Rival added. They also need to add you for the rivalry to appear in-game.',
+    })
+    return
+  }
+
+  // Remove path. Match by refid + version only — the old `name` filter
+  // was the cause of "I clicked Remove but the rival is still there"
+  // bugs whenever the rival had been renamed since being added.
+  if (theyRivalYou) {
+    DB.Upsert(data.rivalId, {collection: 'rival', refid: data.refid, version: ver}, {$set: {mutual: false}})
+  }
+  let removed = await DB.Remove(data.refid, {collection: 'rival', refid: data.rivalId, version: ver})
+  if (!removed) {
+    send.json({ success: false, error: 'Could not remove the rival entry. It may already be gone — refresh the page.' })
+    return
+  }
+  send.json({
+    success: true,
+    action: 'removed',
+    msg: 'Rival removed.',
+  })
 }
 
 export const preGeneRoll = async (data: { set: number, refid: string, items: [] }, send: WebUISend) => {
@@ -895,20 +956,27 @@ export const updateScore = async (data: {
     else update.grade = 1;
   }
 
-  // Recompute volforce for v7
+  // Recompute volforce for v7. Custom (Nautica) charts are always stored
+  // at volforce 0 regardless of the recomputed value — see the matching
+  // branch in profiles.saveScore. Skipping the lookup also avoids paying
+  // for the music-db scan when we're going to discard the result anyway.
   if (version === 7 && (data.score != null || data.clear != null)) {
-    const finalScore = update.score ?? record.score;
-    const finalClear = update.clear ?? record.clear;
-    const finalGrade = update.grade ?? record.grade;
+    if (isCustomMid(mid)) {
+      update.volforce = 0;
+    } else {
+      const finalScore = update.score ?? record.score;
+      const finalClear = update.clear ?? record.clear;
+      const finalGrade = update.grade ?? record.grade;
 
-    const mdb = await loadMusicDb();
-    if (mdb) {
-      const diffName = ['novice', 'advanced', 'exhaust', 'infinite', 'maximum', 'ultimate'];
-      const song = mdb.mdb.music.find((s: any) => String(s.id) === String(mid));
-      if (song) {
-        const diffLevel = parseFloat(song.difficulty?.[diffName[type]]) || 0;
-        if (diffLevel > 0) {
-          update.volforce = computeForce(diffLevel, finalScore, finalClear, finalGrade);
+      const mdb = await loadMusicDb();
+      if (mdb) {
+        const diffName = ['novice', 'advanced', 'exhaust', 'infinite', 'maximum', 'ultimate'];
+        const song = mdb.mdb.music.find((s: any) => String(s.id) === String(mid));
+        if (song) {
+          const diffLevel = parseFloat(song.difficulty?.[diffName[type]]) || 0;
+          if (diffLevel > 0) {
+            update.volforce = computeForce(diffLevel, finalScore, finalClear, finalGrade);
+          }
         }
       }
     }

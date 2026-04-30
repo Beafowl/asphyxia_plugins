@@ -8,7 +8,7 @@ import { Profile } from '../models/profile';
 import { ValgeneTicket } from '../models/valgene_ticket';
 import { WeeklyMusicScore } from '../models/weeklymusic';
 import { VariantPower } from '../models/variant';
-import { getVersion, IDToCode, loadMusicDb, isValidMid } from '../utils';
+import { getVersion, IDToCode, loadMusicDb, isValidMid, isCustomMid } from '../utils';
 import { invalidateHiscoreCache } from './features';
 import { Mix } from '../models/mix';
 import { CURRENT_ARENA, EVENT_ITEMS6, UNLOCK_EVENTS6 } from '../data/exg';
@@ -228,7 +228,15 @@ export const saveScore: EPR = async (info, data, send) => {
         record.exscore = exscore;
       }
 
-      if (!('volforce' in record) || volforce > record.volforce) {
+      // Custom (Nautica) charts always store volforce 0 — every other field
+      // is preserved so the score, exscore, lamp, and grade still show in
+      // the player's history, but custom-chart plays don't contribute to
+      // the in-game / web-UI volforce ranking. Forcing the value here also
+      // retroactively zeros any leftover volforce written by older builds:
+      // the next save_m for that chart overwrites the stale number.
+      if (isCustomMid(mid)) {
+        record.volforce = 0;
+      } else if (!('volforce' in record) || volforce > record.volforce) {
         record.volforce = volforce;
       }
 

@@ -164,6 +164,46 @@ $(document).ready(async function () {
   currentProfile = your_profile_data.find(p => p.version === currentVersion);
   refid = currentProfile.__refid;
 
+  // ── Defensive profile lookup ──────────────────────────────────────────
+  // A rival entry can outlive the profile it points at: if the rival's
+  // profile gets deleted (or saved at a different version with no row at
+  // the current version), `profiles_data.filter(...)[0]` returns undefined.
+  // The previous code blindly dereferenced `.name`, which threw mid-loop
+  // and bricked the whole rivals tab — the dropdown ended up empty and
+  // nothing could be selected. Treat that case as an orphan: keep the
+  // entry visible so the user can remove it, but stub the name in.
+  function profileForRefid(rivalRefid, version) {
+    var match = profiles_data.find(
+      p => p.__refid === rivalRefid && (version == null || p.version === version)
+    );
+    if (match) return match;
+    // Fall back to any version of that refid — the profile still exists,
+    // just not at the current version.
+    return profiles_data.find(p => p.__refid === rivalRefid) || null;
+  }
+
+  function rivalDisplayName(rival) {
+    var prof = profileForRefid(rival.refid, currentVersion);
+    if (prof && prof.name) return prof.name;
+    // Last resort: whatever was stored on the rival doc when it was
+    // created. Stale, but better than "undefined".
+    if (rival.name) return rival.name + ' (profile missing)';
+    return '(unknown profile)';
+  }
+
+  function formatSdvxId(id) {
+    if (id == null) return '';
+    var padded = String(id).padStart(8, '0');
+    return padded.slice(0, 4) + '-' + padded.slice(4);
+  }
+
+  // Filter to rivals on the current version only. Entries from other
+  // versions are stored in the same collection and shouldn't pollute the
+  // UI for the version you're browsing.
+  function rivalsForVersion() {
+    return rivals_data.filter(r => r.version === currentVersion);
+  }
+
   profiles_data_filtered = profiles_data.filter(
     p =>
       p.__refid !== refid &&
@@ -190,51 +230,160 @@ $(document).ready(async function () {
     }
   }
 
-  for (let ind in rivals_data) {
+  // Populate the compare-with dropdown using defensive name lookups so a
+  // single bad entry doesn't kill the whole list.
+  rivalsForVersion().forEach(function (rival) {
     $('#rivallist').append(
       $('<option>', {
-        value: rivals_data[ind].refid,
-        text: profiles_data.filter(p => p.__refid === rivals_data[ind].refid)[0].name,
+        value: rival.refid,
+        text: rivalDisplayName(rival),
       })
     );
+  });
+
+  // ── "Your Rivals" list ─────────────────────────────────────────────────
+  function renderRivalsList() {
+    var list = rivalsForVersion();
+    var $body = $('#rivals-list-body').empty();
+    if (list.length === 0) {
+      $('#rivals-empty').show();
+      $('#rivals-list-table').hide();
+      return;
+    }
+    $('#rivals-empty').hide();
+    $('#rivals-list-table').show();
+
+    list.forEach(function (rival) {
+      var prof = profileForRefid(rival.refid, currentVersion);
+      var isOrphan = !prof || !prof.name;
+      var $row = $('<tr>');
+      $row.append($('<td>').text(formatSdvxId(rival.sdvxID || (prof && prof.id) || '')));
+      var $name = $('<td>').text(rivalDisplayName(rival));
+      if (isOrphan) {
+        $name.append(
+          $('<span class="tag is-warning is-light ml-2" style="margin-left:0.5em">orphan</span>')
+        );
+      }
+      $row.append($name);
+      $row.append(
+        $('<td>').html(
+          rival.mutual
+            ? '<span class="tag is-success is-light">Mutual</span>'
+            : '<span class="tag is-light">One-way</span>'
+        )
+      );
+      var $btn = $('<button class="button is-small is-danger is-light">Remove</button>')
+        .on('click', function () { removeRival(rival.refid); });
+      $row.append($('<td>').append($btn));
+      $body.append($row);
+    });
+  }
+  renderRivalsList();
+
+  // ── Status banner ──────────────────────────────────────────────────────
+  // Replaces the previous alert() popups. Auto-dismisses after a few
+  // seconds for success messages; errors stay until the next action.
+  var bannerTimer = null;
+  function showBanner(kind, message) {
+    var $b = $('#rival-status-banner')
+      .removeClass()
+      .addClass('notification is-' + kind)
+      .empty();
+    var $delete = $('<button class="delete">').on('click', function () {
+      $b.hide();
+    });
+    $b.append($delete).append(document.createTextNode(message)).show();
+    if (bannerTimer) clearTimeout(bannerTimer);
+    if (kind !== 'danger' && kind !== 'warning') {
+      bannerTimer = setTimeout(function () { $b.fadeOut(400); }, 6000);
+    }
   }
 
-  $('#profilelist').change(async function () {
-    console.log($('#profilelist').val());
-    if (
-      rivals_data.filter(p => p.refid === $('#profilelist').val() && p.version === currentVersion)
-        .length > 0
-    ) {
-      $('#rival-button').text('Delete Rival');
-    } else {
-      $('#rival-button').text('Add Rival');
+  // ── Add / remove flows ─────────────────────────────────────────────────
+  // The server's `addRival` event toggles add/remove based on whether the
+  // rival exists. We expose two button entrypoints (the Add/Remove toggle
+  // on the form and a per-row Remove button on the list) but both go
+  // through the same handler — we just frame the message to the user
+  // based on what was supposed to happen.
+  function reloadAfter(delayMs) {
+    setTimeout(function () { location.reload(); }, delayMs);
+  }
+
+  async function addRivalRequest(rivalRefid, expectedAction) {
+    try {
+      var response = await emit('addRival', {
+        rivalId: rivalRefid,
+        refid: refid,
+        version: currentVersion,
+      });
+      var d = response && response.data;
+      if (!d) {
+        showBanner('danger', 'Server returned no response. Please try again.');
+        return;
+      }
+      if (d.success === false || d.error) {
+        showBanner('danger', d.error || d.msg || 'Operation failed.');
+        return;
+      }
+      // Backwards compat: handler used to send only { msg }. Treat a
+      // present msg without explicit success as a soft success.
+      var action = d.action || expectedAction || 'changed';
+      var msg = d.msg ||
+        (action === 'added' ? 'Rival added.' :
+         action === 'removed' ? 'Rival removed.' :
+         'Rival list updated.');
+      showBanner(action === 'removed' ? 'info' : 'success', msg);
+      reloadAfter(800);
+    } catch (err) {
+      showBanner('danger', 'Network error: ' + (err && err.message ? err.message : err));
     }
+  }
+
+  function removeRival(rivalRefid) {
+    addRivalRequest(rivalRefid, 'removed');
+  }
+
+  $('#profilelist').change(function () {
+    var picked = $('#profilelist').val();
+    var alreadyRival = rivals_data.some(
+      r => r.refid === picked && r.version === currentVersion
+    );
+    $('#rival-button').text(alreadyRival ? 'Delete Rival' : 'Add Rival');
   });
 
   $('#rivallist').change(async function () {
     $('#scorecompare').DataTable().clear().destroy();
-    if ($('#rivallist').val() !== '0') {
-      await emit('getRivalScores', {
+    if ($('#rivallist').val() === '0') return;
+    try {
+      var response = await emit('getRivalScores', {
         rivalId: $('#rivallist').val(),
         refid: refid,
         version: currentVersion,
-      }).then(function (response) {
-        populateTable(response.data.yourScores, response.data.rivalScores, music_db);
       });
+      if (!response || !response.data) {
+        showBanner('danger', 'Could not load rival scores.');
+        return;
+      }
+      if (response.data.error) {
+        showBanner('danger', response.data.error);
+        return;
+      }
+      populateTable(response.data.yourScores, response.data.rivalScores, music_db);
+    } catch (err) {
+      showBanner('danger', 'Failed to load rival scores: ' + err.message);
     }
   });
 
-  $('#addrival').click(async function () {
-    if ($('#profilelist').val() !== '0') {
-      await emit('addRival', {
-        rivalId: $('#profilelist').val(),
-        refid: refid,
-        version: currentVersion,
-      }).then(function (response) {
-        alert(response.data.msg);
-        location.reload();
-      });
+  $('#addrival').click(function () {
+    var picked = $('#profilelist').val();
+    if (!picked || picked === '0') {
+      showBanner('warning', 'Pick a profile from the dropdown first.');
+      return;
     }
+    var alreadyRival = rivals_data.some(
+      r => r.refid === picked && r.version === currentVersion
+    );
+    addRivalRequest(picked, alreadyRival ? 'removed' : 'added');
   });
 
   $('#version_select').change(function () {
