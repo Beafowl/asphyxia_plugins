@@ -998,3 +998,260 @@ export const updateScore = async (data: {
   });
   send.json({ success: true, record: updated });
 }
+
+// Spawn ifstools (Konami's IFS archive extractor) on every jacket archive
+// in the configured game directory, then move the extracted PNGs into the
+// plugin's webui/asset/jackets/ folder and delete the temporary ifstools
+// output. Keeps the game install clean — only the original .ifs archives
+// are left behind under data/graphics/, and every jk_*.png lives in the
+// plugin alongside other game-pulled assets like nemsys/ and ap_card/.
+//
+// Why shell out instead of porting ifstools to JS: a JS-native MD5Folder /
+// DXT decode pipeline lives in src/utils/ifs.ts and works for some IFS
+// variants but breaks on others (game-version-specific manifest layouts,
+// byte-swapped DXT endpoints, etc.). ifstools is the upstream reference
+// implementation maintained by the SDVX modding community; calling it
+// keeps us on the proven path. Tradeoff: requires a Python install with
+// `pip install ifstools` on the server box.
+export const extractJackets = async (data: {}, send: WebUISend) => {
+  const errors: string[] = [];
+  const archives: Array<{ name: string; ok: boolean; message: string; pngCount?: number }> = [];
+
+  try {
+    const gameRoot = U.GetConfig('sdvx_eg_root_dir');
+    if (!gameRoot) {
+      send.json({
+        status: 'error',
+        archives,
+        errors: ["'sdvx_eg_root_dir' is not configured in plugin settings."],
+      });
+      return;
+    }
+
+    const path = require('path');
+    const graphicsDir = path.join(gameRoot, 'data', 'graphics');
+    if (!fs.existsSync(graphicsDir)) {
+      send.json({
+        status: 'error',
+        archives,
+        errors: [`Graphics directory not found: ${graphicsDir}`],
+      });
+      return;
+    }
+
+    // Where the extracted PNGs end up. Sits next to nemsys/, ap_card/,
+    // chat_stamp/, etc. — same convention copyResourcesFromGame uses.
+    // `plugins/...` resolves against the asphyxia process's cwd, which is
+    // dist/ in dev mode and the install dir in pkg builds. Either way
+    // it lands inside the plugin tree so the jacket HTTP route can serve
+    // from a stable location independent of the game install path.
+    const targetDir = path.join('plugins', 'sdvx@asphyxia', 'webui', 'asset', 'jackets');
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const ifsFiles = fs
+      .readdirSync(graphicsDir)
+      .filter(f => /^s_jacket\d+\.ifs$/i.test(f))
+      .sort()
+      .map(f => path.join(graphicsDir, f));
+
+    if (ifsFiles.length === 0) {
+      send.json({
+        status: 'error',
+        archives,
+        errors: [`No s_jacket*.ifs files found in ${graphicsDir}`],
+      });
+      return;
+    }
+
+    // Probe ways to invoke ifstools — `ifstools` on PATH first, then
+    // `python -m ifstools` and friends so the user doesn't have to fight
+    // with PATH config to make this work on a fresh install.
+    const candidates = [
+      { cmd: 'ifstools', args: [] },
+      { cmd: 'python', args: ['-m', 'ifstools'] },
+      { cmd: 'python3', args: ['-m', 'ifstools'] },
+      { cmd: 'py', args: ['-m', 'ifstools'] },
+    ];
+
+    let runner: { cmd: string; args: string[] } | null = null;
+    for (const cand of candidates) {
+      try {
+        const probe = await runIfsCommand(cand.cmd, [...cand.args, '--help'], { timeoutMs: 5000 });
+        const haystack = (probe.stdout + probe.stderr).toLowerCase();
+        if (probe.exitCode === 0 || haystack.includes('ifs')) {
+          runner = cand;
+          break;
+        }
+      } catch {
+        // try the next candidate
+      }
+    }
+
+    if (!runner) {
+      send.json({
+        status: 'error',
+        archives,
+        errors: [
+          'ifstools could not be found. Install it with `pip install ifstools` on the asphyxia host, then retry.',
+        ],
+      });
+      return;
+    }
+
+    console.log(`[Jackets] Using ifstools via: ${runner.cmd} ${runner.args.join(' ')}`);
+    console.log(`[Jackets] Output folder: ${path.resolve(targetDir)}`);
+
+    for (const ifsPath of ifsFiles) {
+      const fileName = path.basename(ifsPath);
+      const extractedDir = ifsPath.replace(/\.ifs$/i, '_ifs');
+      console.log(`[Jackets] Extracting ${fileName}...`);
+
+      try {
+        // 15-minute ceiling per archive. ifstools writes <name>_ifs/tex/...
+        // next to the input file regardless of cwd, so we let it do that
+        // and then move the files into the plugin asset folder ourselves.
+        const result = await runIfsCommand(runner.cmd, [...runner.args, ifsPath], {
+          timeoutMs: 15 * 60 * 1000,
+          cwd: graphicsDir,
+          streamPrefix: '[ifstools]',
+        });
+        if (result.exitCode !== 0) {
+          const tail = (result.stderr || result.stdout || '').slice(-500);
+          archives.push({
+            name: fileName,
+            ok: false,
+            message: `ifstools exit ${result.exitCode}: ${tail}`,
+          });
+          errors.push(`${fileName}: ifstools exited ${result.exitCode}`);
+          continue;
+        }
+
+        // Move every PNG out of <extractedDir>/tex/ into the plugin folder.
+        // Using rename when possible (fast, same-volume) and falling back
+        // to copy+unlink across volumes. The source files are the same
+        // size as the dest, so disk usage doesn't double during the move.
+        const texDir = path.join(extractedDir, 'tex');
+        let moved = 0;
+        let moveErrors: string[] = [];
+        if (fs.existsSync(texDir)) {
+          for (const entry of fs.readdirSync(texDir)) {
+            if (!entry.toLowerCase().endsWith('.png')) continue;
+            const src = path.join(texDir, entry);
+            const dst = path.join(targetDir, entry);
+            try {
+              try {
+                fs.renameSync(src, dst);
+              } catch {
+                fs.copyFileSync(src, dst);
+                fs.unlinkSync(src);
+              }
+              moved++;
+            } catch (err: any) {
+              moveErrors.push(`${entry}: ${err.message || err}`);
+            }
+          }
+        } else {
+          moveErrors.push(`No tex/ folder under ${extractedDir} after extraction`);
+        }
+
+        // Delete the now-mostly-empty extracted folder so the game
+        // install stays clean. Best-effort — if it fails (Windows file
+        // lock, etc.) we'd rather report the move success than abort.
+        try {
+          fs.rmSync(extractedDir, { recursive: true, force: true });
+        } catch (err: any) {
+          moveErrors.push(`cleanup: could not remove ${extractedDir}: ${err.message || err}`);
+        }
+
+        if (moveErrors.length > 0) {
+          archives.push({
+            name: fileName,
+            ok: moved > 0,
+            message: `Moved ${moved} PNG(s) to plugins/sdvx@asphyxia/webui/asset/jackets/. Issues: ${moveErrors.slice(0, 3).join('; ')}`,
+            pngCount: moved,
+          });
+          for (const e of moveErrors) errors.push(`${fileName}: ${e}`);
+        } else {
+          archives.push({
+            name: fileName,
+            ok: true,
+            message: `Moved ${moved} PNG(s) to plugins/sdvx@asphyxia/webui/asset/jackets/`,
+            pngCount: moved,
+          });
+        }
+      } catch (err: any) {
+        archives.push({
+          name: fileName,
+          ok: false,
+          message: err.message || String(err),
+        });
+        errors.push(`${fileName}: ${err.message || err}`);
+      }
+    }
+
+    send.json({
+      status: errors.length === 0 ? 'ok' : 'partial',
+      archives,
+      errors,
+      jacketsDir: path.resolve(targetDir),
+    });
+  } catch (err: any) {
+    send.json({
+      status: 'error',
+      archives,
+      errors: [err.message || String(err)],
+    });
+  }
+};
+
+// Slimmer cousin of converter.ts:runCommand — same idea (promise-wrapped
+// spawn that captures stdout/stderr and rejects on timeout) but no need to
+// pull in the converter module just for this. Kept local to avoid coupling
+// the jackets handler to the chart-conversion pipeline.
+function runIfsCommand(
+  cmd: string,
+  args: string[],
+  options: { timeoutMs?: number; cwd?: string; streamPrefix?: string } = {}
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const { spawn } = require('child_process');
+    const child = spawn(cmd, args, {
+      cwd: options.cwd,
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    let timer: NodeJS.Timeout | null = null;
+    if (options.timeoutMs) {
+      timer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch { /* already gone */ }
+        reject(new Error(`Process timed out after ${options.timeoutMs}ms`));
+      }, options.timeoutMs);
+    }
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf8');
+      stdout += text;
+      if (options.streamPrefix) {
+        for (const line of text.split(/\r?\n/)) if (line.length) console.log(`${options.streamPrefix} ${line}`);
+      }
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf8');
+      stderr += text;
+      if (options.streamPrefix) {
+        for (const line of text.split(/\r?\n/)) if (line.length) console.error(`${options.streamPrefix} ${line}`);
+      }
+    });
+    child.on('error', (err: Error) => {
+      if (timer) clearTimeout(timer);
+      reject(err);
+    });
+    child.on('close', (code: number | null) => {
+      if (timer) clearTimeout(timer);
+      resolve({ exitCode: code ?? -1, stdout, stderr });
+    });
+  });
+}

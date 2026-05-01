@@ -3,6 +3,7 @@ import {hiscore, rival, globalMatch, lounge, entryE} from './handlers/features';
 import {
   updateProfile,
   copyResourcesFromGame,
+  extractJackets,
   getRivalScores,
   addRival,
   preGeneRoll,
@@ -74,8 +75,10 @@ export function register() {
   R.Config('sdvx_drive_oauth_client_secret', { type: 'string', needRestart: false, default: '', name: 'Drive OAuth Client Secret', desc: 'OAuth 2.0 Client Secret that pairs with the Client ID above.'});
   R.Config('sdvx_drive_oauth_refresh_token', { type: 'string', needRestart: false, default: '', name: 'Drive OAuth Refresh Token', desc: 'Populated automatically after you click "Authorize with Google Drive" on the Custom Charts Admin page. Leave empty.'});
   R.Config('sdvx_drive_folder_id', { type: 'string', needRestart: false, default: '', name: 'Drive Folder ID', desc: 'The target Google Drive folder ID (the last segment of the folder URL). Uploads go into this folder under your own Google account, counting against your personal Drive quota.'});
+  R.Config('sdvx_chrome_path', { type: 'string', needRestart: false, default: '', name: 'Chrome / Chromium / Edge executable', desc: 'Absolute path to a Chromium-based browser used to render the VF Top 50 PNG endpoint (/api/sdvx/vf-top-50/<refid>.png). Leave empty to auto-detect Chrome and Edge on Windows / macOS / Linux. Only needed if auto-detect fails or you want a specific install.'});
 
   R.WebUIEvent('copyResourcesFromGame', copyResourcesFromGame);
+  R.WebUIEvent('extractJackets', extractJackets);
   R.WebUIEvent('getRivalScores', getRivalScores);
   R.WebUIEvent('addRival', addRival);
   R.WebUIEvent('preGeneRoll', preGeneRoll);

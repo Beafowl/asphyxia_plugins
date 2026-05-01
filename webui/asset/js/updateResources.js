@@ -126,4 +126,53 @@ $(document).ready(async function() {
             }
         )
     });
+
+    // Extract Jackets button — runs the extractJackets WebUI event which
+    // shells out to ifstools on the server. Live progress goes to the
+    // server console (streamPrefix '[ifstools]'); the page just shows a
+    // running status and the per-archive summary when the run finishes.
+    var $jacketLog = document.getElementById('jacketlog');
+    function jlog(line) { if ($jacketLog) $jacketLog.textContent += line + '\n'; }
+
+    $('#extractJackets').click(async function () {
+        var $btn = $('#extractJackets');
+        if ($jacketLog) $jacketLog.textContent = '';
+        jlog('Running ifstools on every s_jacket*.ifs in the configured game directory.');
+        jlog('This can take 30-60 seconds per archive — see the asphyxia console for live ifstools output.\n');
+
+        $btn.prop('disabled', true).addClass('is-loading');
+        try {
+            var response = await emit('extractJackets');
+            var data = response && response.data;
+            if (!data) {
+                jlog('No response from server.');
+                return;
+            }
+
+            var archives = data.archives || [];
+            if (archives.length === 0 && (!data.errors || data.errors.length === 0)) {
+                jlog('No s_jacket*.ifs files found in the configured game directory.');
+            }
+
+            archives.forEach(function (a) {
+                var prefix = a.ok ? '[OK]   ' : '[FAIL] ';
+                jlog(prefix + a.name + '  —  ' + a.message);
+            });
+
+            if (data.errors && data.errors.length > 0) {
+                jlog('\nErrors:');
+                data.errors.forEach(function (e) { jlog('- ' + e); });
+            }
+
+            var statusMsg =
+                data.status === 'ok' ? '\nDone. Reload the VF Top 50 page to see jackets.' :
+                data.status === 'partial' ? '\nDone with errors. Some archives extracted, see above.' :
+                '\nFailed.';
+            jlog(statusMsg);
+        } catch (err) {
+            jlog('Network / event error: ' + (err && err.message ? err.message : err));
+        } finally {
+            $btn.prop('disabled', false).removeClass('is-loading');
+        }
+    });
 })

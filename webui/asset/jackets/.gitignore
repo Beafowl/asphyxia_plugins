@@ -1,0 +1,7 @@
+# Jacket PNGs are extracted by the "Extract Jackets" button (handlers/
+# webui.ts → extractJackets) on the host that owns the game install. They
+# come from the user's licensed game data, so we don't ship them in the
+# plugin repo — only the directory is tracked so the route has a stable
+# place to look.
+*.png
+*.PNG

@@ -226,7 +226,10 @@ function vfRenderGrid(top50) {
     // crossOrigin lets html2canvas rasterize it even though we're on a
     // same-origin endpoint; harmless either way.
     img.crossOrigin = 'anonymous';
-    img.src = '/api/sdvx/jacket/' + r.mid + '.png';
+    // Pass the chart's `type` so the route can pick the matching
+    // per-difficulty jacket (NOV/ADV/EXH/INF/MXM each have their own art
+    // in s_jacket*_ifs/tex/jk_<padded>_<typeIdx>_t.png).
+    img.src = '/api/sdvx/jacket/' + r.mid + '.png?type=' + (r.type != null ? r.type : '');
     img.onerror = (function (el) {
       return function () {
         el.innerHTML = '<span class="vf-nojk">no jacket</span>';

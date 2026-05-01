@@ -23,5 +23,25 @@ div
       .field
         textarea.log-field(rows="50" id="logtextarea" name="logtextarea" disabled)
 
+  .card.mt-5
+    .card-header
+      p.card-header-title
+        span.icon
+          i.mdi.mdi-image-multiple
+        | Extract Jackets (run ifstools)
+    .card-info.collapsible-card.collapsible-jackets
+      ul
+        li(style="font-size:14px") Spawns #[strong ifstools] against every #[code s_jacket*.ifs] in the configured game's #[code data/graphics/] folder. Each archive becomes a sibling #[code _ifs/] folder of PNG files that the WebUI's jacket route reads directly — no asphyxia restart needed.
+        li(style="font-size:14px") Requires Python with #[strong ifstools] installed on this server: #[code pip install ifstools]. The handler probes for #[code ifstools] on PATH first, then #[code python -m ifstools] / #[code python3 -m ifstools] / #[code py -m ifstools].
+        li(style="font-size:14px") Re-run after a game update if new IFS files are added.
+    .card-content
+      .field
+        button.button.is-primary(type="button" id="extractJackets")
+          span.icon
+            i.mdi.mdi-download-box
+          span Extract Jackets
+      .field
+        textarea.log-field(rows="20" id="jacketlog" name="jacketlog" disabled)
+
 script(src="https://requirejs.org/docs/release/2.3.5/minified/require.js")
 script(type="text/javascript" src="static/asset/js/updateResources.js")
