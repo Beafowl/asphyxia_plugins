@@ -185,14 +185,49 @@ function vfFormatDate() {
   return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
 }
 
+// Ordered low→high. emblem index matches em6_NN_i_eab.png in static/asset/force/.
+var VF_CLASSES = [
+  { name: 'SIENNA',    threshold:  0.0, gate: 2.5,  emblem:  1 },
+  { name: 'COBALT',    threshold: 10.0, gate: 0.5,  emblem:  2 },
+  { name: 'DANDELION', threshold: 12.0, gate: 0.5,  emblem:  3 },
+  { name: 'CYAN',      threshold: 14.0, gate: 0.25, emblem:  4 },
+  { name: 'SCARLET',   threshold: 15.0, gate: 0.25, emblem:  5 },
+  { name: 'CORAL',     threshold: 16.0, gate: 0.25, emblem:  6 },
+  { name: 'ARGENTO',   threshold: 17.0, gate: 0.25, emblem:  7 },
+  { name: 'ELDORA',    threshold: 18.0, gate: 0.25, emblem:  8 },
+  { name: 'CRIMSON',   threshold: 19.0, gate: 0.25, emblem:  9 },
+  { name: 'IMPERIAL',  threshold: 20.0, gate: 1.0,  emblem: 10 },
+];
+var VF_GATE_ROMAN = ['I', 'II', 'III', 'IV'];
+
+function vfGetClass(vfTotal) {
+  var cls = VF_CLASSES[0];
+  for (var i = 0; i < VF_CLASSES.length; i++) {
+    if (vfTotal >= VF_CLASSES[i].threshold) cls = VF_CLASSES[i];
+    else break;
+  }
+  var gateIdx = Math.min(Math.floor((vfTotal - cls.threshold) / cls.gate), 3);
+  if (gateIdx < 0) gateIdx = 0;
+  return {
+    name: cls.name,
+    gate: VF_GATE_ROMAN[gateIdx],
+    emblemUrl: 'static/asset/force/em6_' + (cls.emblem < 10 ? '0' : '') + cls.emblem + '_i_eab.png',
+  };
+}
+
 function vfRenderHeader(top50) {
   var prof = (vfProfileData || []).find(function (p) { return p.version === vfCurrentVersion; })
            || (vfProfileData && vfProfileData[0]) || {};
   var playerName = (prof.name || 'PLAYER').toString();
   var vfTotal = vfTotalVF(top50);
+  var cls = vfGetClass(vfTotal);
 
   document.getElementById('vf_header_playername').textContent = playerName;
   document.getElementById('vf_header_total_vf').textContent = vfFmtNumber(vfTotal, 3) + ' VF — ' + (VF_VERSION_NAMES[vfCurrentVersion] || ('v' + vfCurrentVersion));
+  document.getElementById('vf_header_class_name').textContent = cls.name + ' ' + cls.gate;
+  var emblem = document.getElementById('vf_header_class_emblem');
+  emblem.src = cls.emblemUrl;
+  emblem.alt = cls.name + ' ' + cls.gate;
   document.getElementById('vf_header_date').textContent = vfFormatDate();
 }
 

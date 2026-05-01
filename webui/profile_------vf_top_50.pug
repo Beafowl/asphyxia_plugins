@@ -2,10 +2,6 @@
   profile: DB.Find(refid, { collection: 'profile' })
   score_data: DB.Find(refid, { collection: 'music' })
 
--
-  const padded = profile[0] ? _.padStart(profile[0].id.toString(), 8) : '00000000';
-  const sdvxid = `${padded.slice(0, 4)}-${padded.slice(4)}`;
-
 link(rel="stylesheet" href="static/asset/css/vf_top_50.css")
 
 div.vf-top50-page
@@ -36,11 +32,12 @@ div.vf-top50-page
           .vf-header-left
             .vf-header-title ASPHYXIA ∇ VF TOP 50
             .vf-header-playername#vf_header_playername
-            .vf-header-vf#vf_header_total_vf
             .vf-header-date#vf_header_date
           .vf-header-right
-            .vf-header-sdvxid#vf_header_sdvxid= sdvxid
-            .vf-header-source vftopfifty/asphyxia
+            .vf-header-class
+              img.vf-header-class-emblem#vf_header_class_emblem(crossorigin="anonymous" alt="")
+              span.vf-header-class-name#vf_header_class_name
+            .vf-header-vf#vf_header_total_vf
         #vf_grid.vf-grid
 
 div(hidden id='vf-profile-pass') !{JSON.stringify(profile)}
