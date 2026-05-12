@@ -141,7 +141,6 @@ async function doBulkConvert(songs: NauticaSong[]): Promise<{ ok: number; failed
   //   - cleanup the per-song tmp dir.
   for (const p of prepared) {
     try {
-      patchMergedXml(p.song, gameRoot, mixName);
       updateCustomMusicDb(p.song);
     } catch (err: any) {
       console.error(`[Nautica] Post-process failed for ${p.song.title}: ${err.message}`);
@@ -163,6 +162,9 @@ async function doBulkConvert(songs: NauticaSong[]): Promise<{ ok: number; failed
       console.error(`[Nautica] Status update failed for ${p.song.title}: ${err.message}`);
     }
   }
+
+  // Phase 5b: rebuild the merged XML once, now that all songs are marked ready
+  await rebuildMergedXml();
 
   // Phase 6: Drive uploads — throttled + retry. Firing all N at once caused
   // Google to reset most of the connections mid-upload (read ECONNRESET).
@@ -287,6 +289,9 @@ async function processQueueLoop() {
         { $set: { status: 'ready' as const, convertedAt: Date.now() } }
       );
       console.log(`[Nautica] Converted: ${song.title} (ID ${song.mid})`);
+      rebuildMergedXml().catch(err => {
+        console.error(`[Nautica] XML rebuild failed after converting ${song.title}: ${err.message}`);
+      });
 
       if (isDriveEnabled()) {
         const latest = await DB.FindOne<NauticaSong>({ collection: 'nautica_song', nauticaId: song.nauticaId });
@@ -355,7 +360,17 @@ async function prepareForConversion(song: NauticaSong): Promise<PreparedSong | n
     const kshFiles = findFiles(extractDir, '.ksh');
     if (kshFiles.length === 0) throw new Error('No .ksh files found in downloaded chart');
     const kshFile = kshFiles[0];
-    console.log(`[Nautica] Prepared: ${song.title} (${path.basename(kshFile)})`);
+
+    // Parse BPM from KSH header and persist so rebuildMergedXml has accurate values
+    const { min: bpmMin, max: bpmMax } = parseBpmFromKsh(kshFile);
+    song.bpmMin = bpmMin;
+    song.bpmMax = bpmMax;
+    await DB.Update<NauticaSong>(
+      { collection: 'nautica_song', nauticaId: song.nauticaId },
+      { $set: { bpmMin, bpmMax } }
+    );
+
+    console.log(`[Nautica] Prepared: ${song.title} (${path.basename(kshFile)}, BPM ${bpmMin}–${bpmMax})`);
 
     return { song, kshFile, tmpDir };
   } catch (err: any) {
@@ -399,7 +414,6 @@ async function executeConversion(prepared: PreparedSong): Promise<void> {
     const output = await runCommand(voxchargerPath, voxArgs, { timeout: 600000 });
     console.log(`[Nautica] VoxCharger output:\n${output}`);
 
-    patchMergedXml(song, gameRoot, mixName);
     updateCustomMusicDb(song);
     invalidateMusicDbCache();
   } finally {
@@ -618,52 +632,124 @@ function escapeXml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
-function patchMergedXml(song: NauticaSong, gameRoot: string, mixName: string): void {
+// ─── KSH BPM parser ──────────────────────────────────────────────────────────
+
+function parseBpmFromKsh(kshPath: string): { min: number; max: number } {
   try {
+    // Read as binary — BPM values are ASCII digits, encoding doesn't matter
+    const content = fs.readFileSync(kshPath, 'binary');
+    const bpms: number[] = [];
+    for (const line of content.split(/\r?\n/)) {
+      const m = line.match(/^t=(\d+(?:\.\d+)?)$/);
+      if (m) {
+        const bpm = Math.round(parseFloat(m[1]));
+        if (bpm > 0) bpms.push(bpm);
+      }
+    }
+    if (bpms.length === 0) return { min: 120, max: 120 };
+    return { min: Math.min(...bpms), max: Math.max(...bpms) };
+  } catch {
+    return { min: 120, max: 120 };
+  }
+}
+
+// ─── XML generation ───────────────────────────────────────────────────────────
+
+function buildMusicEntry(song: NauticaSong): string {
+  const sjisDummy = '\x83\x5F\x83\x7E\x81\x5B'; // ダミー in Shift-JIS
+
+  const exhChart = song.charts?.find(c => c.difficulty === 3);
+  const mainEffector = exhChart?.effector || song.charts?.[0]?.effector || '-';
+
+  const bpmMin = song.bpmMin || 120;
+  const bpmMax = song.bpmMax || bpmMin;
+
+  const d = song.convertedAt ? new Date(song.convertedAt) : new Date();
+  const dist = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+
+  const ascii = sanitizeAscii(song.title || 'custom');
+
+  // Build per-difficulty map (Nautica: 1=NOV 2=ADV 3=EXH 4=MXM)
+  const diffs: Record<string, { level: number; effector: string }> = {
+    novice:   { level: 0, effector: '-' },
+    advanced: { level: 0, effector: '-' },
+    exhaust:  { level: 0, effector: '-' },
+    infinite: { level: 0, effector: '-' },
+    maximum:  { level: 0, effector: '-' },
+  };
+  const diffMap: Record<number, string> = { 1: 'novice', 2: 'advanced', 3: 'exhaust', 4: 'maximum' };
+  for (const chart of (song.charts || [])) {
+    const key = diffMap[chart.difficulty];
+    if (key) diffs[key] = { level: chart.level, effector: chart.effector || '-' };
+  }
+
+  const diffBlock = (name: string) => {
+    const { level, effector } = diffs[name];
+    return (
+      `<${name}>` +
+      `<difnum __type="u8">${level}</difnum>` +
+      `<illustrator>-</illustrator>` +
+      `<effected_by>${toShiftJIS(escapeXml(effector))}</effected_by>` +
+      `<limited __type="u8">0</limited>` +
+      `</${name}>`
+    );
+  };
+
+  return (
+    `<music id="${song.mid}">` +
+    `<info>` +
+    `<title_name>${toShiftJIS(escapeXml(song.title || ''))}</title_name>` +
+    `<title_yomigana>${sjisDummy}</title_yomigana>` +
+    `<artist_name>${toShiftJIS(escapeXml(song.artist || ''))}</artist_name>` +
+    `<artist_yomigana>${sjisDummy}</artist_yomigana>` +
+    `<ascii>${ascii}</ascii>` +
+    `<bpm_min __type="u32">${bpmMin}</bpm_min>` +
+    `<bpm_max __type="u32">${bpmMax}</bpm_max>` +
+    `<distribution_date __type="u32">${dist}</distribution_date>` +
+    `<version __type="u8">7</version>` +
+    `<inf_ver __type="u8">0</inf_ver>` +
+    `<demo_pri __type="s8">-1</demo_pri>` +
+    `<world __type="u8">0</world>` +
+    `<hold __type="u8">0</hold>` +
+    `<is_fixed __type="u8">1</is_fixed>` +
+    `<illustrator>-</illustrator>` +
+    `<effected_by>${toShiftJIS(escapeXml(mainEffector))}</effected_by>` +
+    `<comment></comment>` +
+    `<price __type="s32">-1</price>` +
+    `<limited __type="u8">0</limited>` +
+    `</info>` +
+    `<difficulty>` +
+    diffBlock('novice') +
+    diffBlock('advanced') +
+    diffBlock('exhaust') +
+    diffBlock('infinite') +
+    diffBlock('maximum') +
+    `</difficulty>` +
+    `</music>`
+  );
+}
+
+export async function rebuildMergedXml(): Promise<void> {
+  try {
+    const gameRoot = U.GetConfig('sdvx_eg_root_dir');
+    const mixName = U.GetConfig('sdvx_custom_mix_name') || 'asphyxia_custom';
+    if (!gameRoot) return;
+
     const xmlPath = path.join(gameRoot, 'data_mods', mixName, 'others', 'music_db.merged.xml');
-    if (!fs.existsSync(xmlPath)) return;
+    const xmlDir = path.dirname(xmlPath);
+    if (!fs.existsSync(xmlDir)) fs.mkdirSync(xmlDir, { recursive: true });
 
-    let xml = fs.readFileSync(xmlPath, 'binary');
+    const allSongs = await DB.Find<NauticaSong>({ collection: 'nautica_song' });
+    const readySongs = (allSongs || [])
+      .filter(s => s.mid > 0 && s.status === 'ready')
+      .sort((a, b) => a.mid - b.mid);
 
-    const idStr = String(song.mid);
-    const entryStart = xml.indexOf(`music id="${idStr}"`);
-    if (entryStart === -1) return;
-    const entryEnd = xml.indexOf('</music>', entryStart);
-    if (entryEnd === -1) return;
-
-    let entry = xml.slice(entryStart, entryEnd + 8);
-
-    // Fix title and artist with correct text from ksm.dev (convert UTF-8 to Shift-JIS)
-    const sjisTitle = toShiftJIS(escapeXml(song.title));
-    const sjisArtist = toShiftJIS(escapeXml(song.artist));
-
-    entry = entry.replace(/<title_name>[^<]*<\/title_name>/, `<title_name>${sjisTitle}</title_name>`);
-    entry = entry.replace(/<artist_name>[^<]*<\/artist_name>/, `<artist_name>${sjisArtist}</artist_name>`);
-
-    // Fix yomigana with safe placeholder (Shift-JIS for ダミー)
-    const sjisDummy = '\x83\x5F\x83\x7E\x81\x5B';
-    entry = entry.replace(/<title_yomigana>[^<]*<\/title_yomigana>/, `<title_yomigana>${sjisDummy}</title_yomigana>`);
-    entry = entry.replace(/<artist_yomigana>[^<]*<\/artist_yomigana>/, `<artist_yomigana>${sjisDummy}</artist_yomigana>`);
-
-    // Splice the per-entry edits back in, then apply global fixes to the
-    // WHOLE document. VoxCharger re-serializes every entry on every import,
-    // so leading-zero BPMs and empty illustrator tags re-appear for older
-    // songs whenever a new one is imported. Fixing per-entry only patches
-    // the current song — global fixes keep all entries clean.
-    xml = xml.slice(0, entryStart) + entry + xml.slice(entryEnd + 8);
-
-    // Strip leading zeros in typed numeric values — otherwise the game's
-    // prop parser reads values like "06380" as octal and aborts music_db
-    // parsing (error 80092209), which breaks chart selection and scores.
-    xml = xml.replace(/__type="(u\d+|s\d+)">0+(\d)/g, '__type="$1">$2');
-
-    // Fix empty illustrator tags across all entries.
-    xml = xml.replace(/<illustrator><\/illustrator>/g, '<illustrator>-</illustrator>');
+    const entries = readySongs.map(buildMusicEntry).join('');
+    const xml = `<?xml version="1.0" encoding="shift_jis"?><mdb>${entries}</mdb>`;
 
     fs.writeFileSync(xmlPath, xml, 'binary');
-
-    console.log(`[Nautica] Patched XML for ${song.title} (ID ${song.mid})`);
+    console.log(`[Nautica] Rebuilt music_db.merged.xml — ${readySongs.length} song(s)`);
   } catch (err: any) {
-    console.error(`[Nautica] Failed to patch XML: ${err.message}`);
+    console.error(`[Nautica] Failed to rebuild music_db.merged.xml: ${err.message}`);
   }
 }

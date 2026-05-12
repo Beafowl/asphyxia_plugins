@@ -11,7 +11,7 @@ import {
   getNauticaSlotsStatus,
   nauticaSlotExhaustedError,
 } from '../utils';
-import { convertNauticaSong, bulkConvertNauticaSongs } from './converter';
+import { convertNauticaSong, bulkConvertNauticaSongs, rebuildMergedXml } from './converter';
 import { deleteDriveFile } from './drive';
 import { WebUISend } from '../../../src/eamuse/EamusePlugin';
 
@@ -476,7 +476,9 @@ export const nauticaRemove = async (data: { nauticaId: string; reason?: string; 
       const gameRoot = U.GetConfig('sdvx_eg_root_dir');
       const mixName = U.GetConfig('sdvx_custom_mix_name') || 'asphyxia_custom';
       if (gameRoot) {
-        removeFromMergedXml(song.mid, gameRoot, mixName);
+        rebuildMergedXml().catch(err => {
+          console.error(`[Nautica] XML rebuild failed after removing ${song.title}: ${err.message}`);
+        });
 
         const idStr = String(song.mid).padStart(4, '0');
         const musicDir = path.join(gameRoot, 'data_mods', mixName, 'music', `${idStr}_nautica`);
@@ -777,15 +779,3 @@ function removeFromCustomMusicDb(musicId: number) {
   } catch {}
 }
 
-function removeFromMergedXml(musicId: number, gameRoot: string, mixName: string) {
-  try {
-    const xmlPath = path.join(gameRoot, 'data_mods', mixName, 'others', 'music_db.merged.xml');
-    if (!fs.existsSync(xmlPath)) return;
-    let xml = fs.readFileSync(xmlPath, 'binary');
-    const pattern = new RegExp(`\\s*<music id="${musicId}">[\\s\\S]*?</music>`, 'g');
-    const updated = xml.replace(pattern, '');
-    if (updated !== xml) {
-      fs.writeFileSync(xmlPath, updated, 'binary');
-    }
-  } catch {}
-}

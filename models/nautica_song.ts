@@ -32,6 +32,10 @@ export interface NauticaSong {
   rejectedBy?: string;
   rejectedAt?: number;
 
+  // BPM range extracted from the KSH source during conversion
+  bpmMin?: number;
+  bpmMax?: number;
+
   // Google Drive offload (set once uploaded post-conversion)
   driveFileId?: string;
   driveFileSize?: number;
