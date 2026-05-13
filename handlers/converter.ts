@@ -658,74 +658,87 @@ function parseBpmFromKsh(kshPath: string): { min: number; max: number } {
 function buildMusicEntry(song: NauticaSong): string {
   const sjisDummy = '\x83\x5F\x83\x7E\x81\x5B'; // ダミー in Shift-JIS
 
-  const exhChart = song.charts?.find(c => c.difficulty === 3);
-  const mainEffector = exhChart?.effector || song.charts?.[0]?.effector || '-';
-
-  const bpmMin = song.bpmMin || 120;
-  const bpmMax = song.bpmMax || bpmMin;
+  // music_db.xml stores BPM as fixed-point u32 = BPM × 100 (175.00 BPM
+  // → 17500). The Nautica DB keeps the raw integer BPM, so scale here.
+  const bpmMin = (song.bpmMin || 120) * 100;
+  const bpmMax = (song.bpmMax || song.bpmMin || 120) * 100;
 
   const d = song.convertedAt ? new Date(song.convertedAt) : new Date();
   const dist = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 
   const ascii = sanitizeAscii(song.title || 'custom');
 
-  // Build per-difficulty map (Nautica: 1=NOV 2=ADV 3=EXH 4=MXM)
-  const diffs: Record<string, { level: number; effector: string }> = {
-    novice:   { level: 0, effector: '-' },
-    advanced: { level: 0, effector: '-' },
-    exhaust:  { level: 0, effector: '-' },
-    infinite: { level: 0, effector: '-' },
-    maximum:  { level: 0, effector: '-' },
-  };
-  const diffMap: Record<number, string> = { 1: 'novice', 2: 'advanced', 3: 'exhaust', 4: 'maximum' };
-  for (const chart of (song.charts || [])) {
-    const key = diffMap[chart.difficulty];
-    if (key) diffs[key] = { level: chart.level, effector: chart.effector || '-' };
+  // Nautica: 1=NOV 2=ADV 3=EXH 4=MXM. No INF charts in user submissions.
+  const diffMap: Record<number, 'novice' | 'advanced' | 'exhaust' | 'maximum'> =
+    { 1: 'novice', 2: 'advanced', 3: 'exhaust', 4: 'maximum' };
+  const charts: Record<string, { level: number; effector: string }> = {};
+  for (const c of (song.charts || [])) {
+    const k = diffMap[c.difficulty];
+    if (k) charts[k] = { level: c.level, effector: c.effector || '-' };
   }
 
-  const diffBlock = (name: string) => {
-    const { level, effector } = diffs[name];
+  // For a missing difficulty the game still expects a stub: difnum=0,
+  // illustrator=effected_by="dummy", no <radar>. For a real chart we set
+  // illustrator to "-" (Nautica doesn't track one) and embed an all-zero
+  // <radar>. limited=3 marks the chart playable; the previous template
+  // emitted 0 which the game treats as locked, so nothing showed up.
+  const diffBlock = (name: 'novice' | 'advanced' | 'exhaust' | 'maximum') => {
+    const c = charts[name];
+    const present = !!c && c.level > 0;
+    const difnum = present ? c.level : 0;
+    const illustrator = present ? '-' : 'dummy';
+    const effected = present ? toShiftJIS(escapeXml(c.effector)) : 'dummy';
+    const radar = present
+      ? '        <radar>\n' +
+        '          <notes __type="u8">0</notes>\n' +
+        '          <peak __type="u8">0</peak>\n' +
+        '          <tsumami __type="u8">0</tsumami>\n' +
+        '          <tricky __type="u8">0</tricky>\n' +
+        '          <hand-trip __type="u8">0</hand-trip>\n' +
+        '          <one-hand __type="u8">0</one-hand>\n' +
+        '        </radar>\n'
+      : '';
     return (
-      `<${name}>` +
-      `<difnum __type="u8">${level}</difnum>` +
-      `<illustrator>-</illustrator>` +
-      `<effected_by>${toShiftJIS(escapeXml(effector))}</effected_by>` +
-      `<limited __type="u8">0</limited>` +
-      `</${name}>`
+      `      <${name}>\n` +
+      `        <difnum __type="u8">${difnum}</difnum>\n` +
+      `        <illustrator>${illustrator}</illustrator>\n` +
+      `        <effected_by>${effected}</effected_by>\n` +
+      `        <price __type="s32">-1</price>\n` +
+      `        <limited __type="u8">3</limited>\n` +
+      `        <jacket_print __type="s32">-2</jacket_print>\n` +
+      `        <jacket_mask __type="s32">0</jacket_mask>\n` +
+      radar +
+      `      </${name}>\n`
     );
   };
 
   return (
-    `<music id="${song.mid}">` +
-    `<info>` +
-    `<title_name>${toShiftJIS(escapeXml(song.title || ''))}</title_name>` +
-    `<title_yomigana>${sjisDummy}</title_yomigana>` +
-    `<artist_name>${toShiftJIS(escapeXml(song.artist || ''))}</artist_name>` +
-    `<artist_yomigana>${sjisDummy}</artist_yomigana>` +
-    `<ascii>${ascii}</ascii>` +
-    `<bpm_min __type="u32">${bpmMin}</bpm_min>` +
-    `<bpm_max __type="u32">${bpmMax}</bpm_max>` +
-    `<distribution_date __type="u32">${dist}</distribution_date>` +
-    `<version __type="u8">7</version>` +
-    `<inf_ver __type="u8">0</inf_ver>` +
-    `<demo_pri __type="s8">-1</demo_pri>` +
-    `<world __type="u8">0</world>` +
-    `<hold __type="u8">0</hold>` +
-    `<is_fixed __type="u8">1</is_fixed>` +
-    `<illustrator>-</illustrator>` +
-    `<effected_by>${toShiftJIS(escapeXml(mainEffector))}</effected_by>` +
-    `<comment></comment>` +
-    `<price __type="s32">-1</price>` +
-    `<limited __type="u8">0</limited>` +
-    `</info>` +
-    `<difficulty>` +
+    `  <music id="${song.mid}">\n` +
+    `    <info>\n` +
+    `      <label>${song.mid}</label>\n` +
+    `      <title_name>${toShiftJIS(escapeXml(song.title || ''))}</title_name>\n` +
+    `      <title_yomigana>${sjisDummy}</title_yomigana>\n` +
+    `      <artist_name>${toShiftJIS(escapeXml(song.artist || ''))}</artist_name>\n` +
+    `      <artist_yomigana>${sjisDummy}</artist_yomigana>\n` +
+    `      <ascii>${ascii}</ascii>\n` +
+    `      <bpm_max __type="u32">${bpmMax}</bpm_max>\n` +
+    `      <bpm_min __type="u32">${bpmMin}</bpm_min>\n` +
+    `      <distribution_date __type="u32">${dist}</distribution_date>\n` +
+    `      <volume __type="u16">91</volume>\n` +
+    `      <bg_no __type="u16">1</bg_no>\n` +
+    `      <genre __type="u8">16</genre>\n` +
+    `      <is_fixed __type="u8">1</is_fixed>\n` +
+    `      <version __type="u8">7</version>\n` +
+    `      <demo_pri __type="s8">0</demo_pri>\n` +
+    `      <inf_ver __type="u8">0</inf_ver>\n` +
+    `    </info>\n` +
+    `    <difficulty>\n` +
     diffBlock('novice') +
     diffBlock('advanced') +
     diffBlock('exhaust') +
-    diffBlock('infinite') +
     diffBlock('maximum') +
-    `</difficulty>` +
-    `</music>`
+    `    </difficulty>\n` +
+    `  </music>\n`
   );
 }
 
@@ -745,7 +758,7 @@ export async function rebuildMergedXml(): Promise<void> {
       .sort((a, b) => a.mid - b.mid);
 
     const entries = readySongs.map(buildMusicEntry).join('');
-    const xml = `<?xml version="1.0" encoding="shift_jis"?><mdb>${entries}</mdb>`;
+    const xml = `<?xml version="1.0" encoding="shift_jis"?>\n<mdb>\n${entries}</mdb>\n`;
 
     fs.writeFileSync(xmlPath, xml, 'binary');
     console.log(`[Nautica] Rebuilt music_db.merged.xml — ${readySongs.length} song(s)`);
