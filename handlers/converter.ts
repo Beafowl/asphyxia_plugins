@@ -678,15 +678,18 @@ function buildMusicEntry(song: NauticaSong): string {
   }
 
   // For a missing difficulty the game still expects a stub: difnum=0,
-  // illustrator=effected_by="dummy", no <radar>. For a real chart we set
-  // illustrator to "-" (Nautica doesn't track one) and embed an all-zero
-  // <radar>. limited=3 marks the chart playable; the previous template
-  // emitted 0 which the game treats as locked, so nothing showed up.
+  // illustrator=effected_by="dummy", no <radar>. For a real chart we
+  // emit empty <illustrator> (Nautica doesn't track one and VoxCharger
+  // leaves it blank too) and an all-zero <radar>. limited=3 marks the
+  // chart playable; the previous template emitted 0 which the game
+  // treats as locked, so nothing showed up. EG stores difnum as level
+  // × 10 (175 → 17.5★) — emitting the raw level made the game read it
+  // as 1.8 and drop the chart.
   const diffBlock = (name: 'novice' | 'advanced' | 'exhaust' | 'maximum') => {
     const c = charts[name];
     const present = !!c && c.level > 0;
-    const difnum = present ? c.level : 0;
-    const illustrator = present ? '-' : 'dummy';
+    const difnum = present ? c.level * 10 : 0;
+    const illustrator = present ? '' : 'dummy';
     const effected = present ? toShiftJIS(escapeXml(c.effector)) : 'dummy';
     const radar = present
       ? '        <radar>\n' +
@@ -725,8 +728,8 @@ function buildMusicEntry(song: NauticaSong): string {
     `      <bpm_min __type="u32">${bpmMin}</bpm_min>\n` +
     `      <distribution_date __type="u32">${dist}</distribution_date>\n` +
     `      <volume __type="u16">91</volume>\n` +
-    `      <bg_no __type="u16">1</bg_no>\n` +
-    `      <genre __type="u8">16</genre>\n` +
+    `      <bg_no __type="u16">0</bg_no>\n` +
+    `      <genre __type="u32">16</genre>\n` +
     `      <is_fixed __type="u8">1</is_fixed>\n` +
     `      <version __type="u8">7</version>\n` +
     `      <demo_pri __type="s8">0</demo_pri>\n` +
