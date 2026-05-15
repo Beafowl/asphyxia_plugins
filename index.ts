@@ -47,6 +47,7 @@ import {
   nauticaSetTesting,
   nauticaReject,
   nauticaSlotsStatus,
+  resumePendingConversions,
 } from './handlers/nautica';
 import { ARENA_STATION_ITEMS } from './data/exg';
 import { ARENA_STATION_ITEMS7 } from './data/nbl';
@@ -170,4 +171,5 @@ export function register() {
   R.Unhandled(undefined)
 
   dataUpdate()
+  resumePendingConversions()
 }

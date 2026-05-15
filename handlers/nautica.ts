@@ -782,3 +782,19 @@ function removeFromCustomMusicDb(musicId: number) {
   } catch {}
 }
 
+export async function resumePendingConversions(): Promise<void> {
+  try {
+    const allSongs = await DB.Find<NauticaSong>({ collection: 'nautica_song' });
+    const stuck = (allSongs || []).filter(
+      (s: any) => s.status === 'pending' || s.status === 'converting'
+    );
+    if (stuck.length === 0) return;
+    console.log(`[Nautica] Resuming ${stuck.length} pending/interrupted conversion(s) from before restart...`);
+    bulkConvertNauticaSongs(stuck as any).catch((err: any) => {
+      console.error(`[Nautica] Startup conversion resume failed: ${err?.message ?? err}`);
+    });
+  } catch (err: any) {
+    console.error(`[Nautica] Failed to query pending songs on startup: ${err?.message ?? err}`);
+  }
+}
+
