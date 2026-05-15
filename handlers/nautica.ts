@@ -544,6 +544,7 @@ export const nauticaImportList = async (data: any, send: WebUISend) => {
     if (!incoming) { send.json({ error: 'Invalid import payload — expected { songs: [...] }' }); return; }
 
     let added = 0, skippedExisting = 0, skippedInvalid = 0;
+    const newSongs: NauticaSong[] = [];
     for (const s of incoming) {
       if (!s || !s.nauticaId || !s.title || !s.downloadUrl) { skippedInvalid++; continue; }
       if (!s.downloadUrl.match(/^https:\/\/[a-z0-9.]*cdn\.digitaloceanspaces\.com\/ksm\.dev\//)) {
@@ -569,9 +570,11 @@ export const nauticaImportList = async (data: any, send: WebUISend) => {
         curatedAt:   Date.now(),
       };
       await DB.Insert(doc);
+      newSongs.push(doc as NauticaSong);
       added++;
     }
 
+    if (newSongs.length > 0) bulkConvertNauticaSongs(newSongs);
     send.json({ success: true, added, skippedExisting, skippedInvalid });
   } catch (err: any) {
     send.json({ error: err.message || 'Failed to import list' });
