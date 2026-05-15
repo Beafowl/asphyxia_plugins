@@ -1,0 +1,8 @@
+{
+  "name": "sdvx-asphyxia-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "archiver": "^6.0.1"
+  }
+}
