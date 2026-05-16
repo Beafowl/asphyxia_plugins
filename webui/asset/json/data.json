@@ -2,7 +2,7 @@
     "nemsys": [
         {
             "value": 0,
-            "name": "VIVID MODEL TYPE "
+            "name": "VIVID MODEL TYPE EXCEED"
         },
         {
             "value": 1,
@@ -171,6 +171,14 @@
         {
             "value": 46,
             "name": "VIVID MODEL TYPE 博麗霊夢"
+        },
+        {
+            "value": 47,
+            "name": "VIVID MODEL TYPE NABLA"
+        },
+        {
+            "value": 48,
+            "name": "BEMANI PRO LEAGUE -SEASON 5-"
         }
     ],
     "subbg": [
@@ -4077,6 +4085,336 @@
             "value": 795,
             "type": "video",
             "name": "初音ミク 14"
+        },
+        {
+            "value": 796,
+            "type": "normal",
+            "name": "らぶ!"
+        },
+        {
+            "value": 797,
+            "type": "normal",
+            "name": "激励BPL"
+        },
+        {
+            "value": 798,
+            "type": "normal",
+            "name": "自分を信じてGOよっ!!!!"
+        },
+        {
+            "value": 799,
+            "type": "normal",
+            "name": "L-SIDE TWIST 720 -GET HIGHER!!!-"
+        },
+        {
+            "value": 800,
+            "type": "normal",
+            "name": "仲間の待つ場所へ"
+        },
+        {
+            "value": 801,
+            "type": "normal",
+            "name": "From Rivals to Riders"
+        },
+        {
+            "value": 802,
+            "type": "normal",
+            "name": "MochuPL -SEASONﾃﾞｳ- TAMA猫部門"
+        },
+        {
+            "value": 803,
+            "type": "normal",
+            "name": "届け!夢と光のメロディ!"
+        },
+        {
+            "value": 804,
+            "type": "normal",
+            "name": "Echoes of the Blue Twinkle March"
+        },
+        {
+            "value": 805,
+            "type": "normal",
+            "name": "おつかれさまの勝利のごはん!"
+        },
+        {
+            "value": 806,
+            "type": "normal",
+            "name": "うたかたの夜明け"
+        },
+        {
+            "value": 807,
+            "type": "normal",
+            "name": "みんなで見る夢"
+        },
+        {
+            "value": 808,
+            "type": "normal",
+            "name": "暁に立つ"
+        },
+        {
+            "value": 809,
+            "type": "normal",
+            "name": "Beyond the Stars!"
+        },
+        {
+            "value": 810,
+            "type": "normal",
+            "name": "龍狼相搏"
+        },
+        {
+            "value": 811,
+            "type": "normal",
+            "name": "observatrice"
+        },
+        {
+            "value": 812,
+            "type": "normal",
+            "name": "This DJ \"Best Performance Legendary\"!!"
+        },
+        {
+            "value": 813,
+            "type": "normal",
+            "name": "JUMP!"
+        },
+        {
+            "value": 814,
+            "type": "normal",
+            "name": "夢芽吹く君へ、祝咲を。"
+        },
+        {
+            "value": 815,
+            "type": "normal",
+            "name": "永遠へ変わる"
+        },
+        {
+            "value": 816,
+            "type": "video",
+            "name": "クル一登場 恋刃(ライブ衣装)"
+        },
+        {
+            "value": 817,
+            "type": "video",
+            "name": "クルー登場 奈奈(ライブ衣装)"
+        },
+        {
+            "value": 818,
+            "type": "video",
+            "name": "クル一登場 烈風刀(ライプ衣装)"
+        },
+        {
+            "value": 819,
+            "type": "video",
+            "name": "クルー登場 紅刃(EXCEED GEAR)"
+        },
+        {
+            "value": 820,
+            "type": "video",
+            "name": "クルー登場 京終始果"
+        },
+        {
+            "value": 821,
+            "type": "video",
+            "name": "クルー登場 かなで(EXCEED GEAR)"
+        },
+        {
+            "value": 822,
+            "type": "video",
+            "name": "クルー登場 オルトリンデ(Λkasha)"
+        },
+        {
+            "value": 823,
+            "type": "video",
+            "name": "クルー登場 ニアノア(EXCEED GEAR)"
+        },
+        {
+            "value": 824,
+            "type": "video",
+            "name": "クルー登場 雛&桃&蒼(EXCEED GEAR)"
+        },
+        {
+            "value": 825,
+            "type": "video",
+            "name": "クルー登場 グレイス(ユメブキ)"
+        },
+        {
+            "value": 826,
+            "type": "video",
+            "name": "クルー登場 いちか"
+        },
+        {
+            "value": 827,
+            "type": "video",
+            "name": "No→to(BPLS5 SOUND VOLTEX テーマソング)01"
+        },
+        {
+            "value": 828,
+            "type": "video",
+            "name": "No→to(BPLS5 SOUND VOLTEX テーマソング)02"
+        },
+        {
+            "value": 829,
+            "type": "video",
+            "name": "No→to(BPLS5 SOUND VOLTEX テーマソング)03"
+        },
+        {
+            "value": 830,
+            "type": "video",
+            "name": "No→to(BPLS5 SOUND VOLTEX テーマソング)04"
+        },
+        {
+            "value": 831,
+            "type": "video",
+            "name": "BPLS3 オープニング"
+        },
+        {
+            "value": 832,
+            "type": "video",
+            "name": "BEMANI PRO LEAGUE 栄光の証"
+        },
+        {
+            "value": 833,
+            "type": "video",
+            "name": "HEXA DIVER －憧憬の銀幕篇－"
+        },
+        {
+            "value": 834,
+            "type": "video",
+            "name": "HEXA DIVER －彩虹の銀幕篇－"
+        },
+        {
+            "value": 835,
+            "type": "video",
+            "name": "HEXA DIVER -CODE:DimiourGEAR-"
+        },
+        {
+            "value": 836,
+            "type": "video",
+            "name": "HEXA DIVER Ep:開催!NEMSYS GAME EXPO"
+        },
+        {
+            "value": 837,
+            "type": "video",
+            "name": "HEXA DIVER Ep:冥府肝試し編～地獄の河もレジャー次第～"
+        },
+        {
+            "value": 838,
+            "type": "video",
+            "name": "ゲーム背景(HEXA DIVER 冥府肝試し)"
+        },
+        {
+            "value": 839,
+            "type": "video",
+            "name": "ゲーム背景(VARIANT GATE)"
+        },
+        {
+            "value": 840,
+            "type": "video",
+            "name": "BEMANI PRO LEAGUE-SEASON 2-"
+        },
+        {
+            "value": 841,
+            "type": "video",
+            "name": "BEMANI PRO LEAGUE-SEASON 3-"
+        },
+        {
+            "value": 842,
+            "type": "video",
+            "name": "BEMANI PRO LEAGUE-SEASON 5-"
+        },
+        {
+            "value": 843,
+            "type": "video",
+            "name": "BEMANI楽曲3D LIVE! 01"
+        },
+        {
+            "value": 844,
+            "type": "video",
+            "name": "BEMANI楽曲3D LIVE! 02"
+        },
+        {
+            "value": 845,
+            "type": "video",
+            "name": "BEMANI楽曲3D LIVE! 03"
+        },
+        {
+            "value": 846,
+            "type": "video",
+            "name": "BEMANI楽曲3D LIVE! 04"
+        },
+        {
+            "value": 847,
+            "type": "video",
+            "name": "BEMANI楽曲3D LIVE! 05"
+        },
+        {
+            "value": 848,
+            "type": "video",
+            "name": "BEMANI楽曲3D LIVE! 06"
+        },
+        {
+            "value": 849,
+            "type": "video",
+            "name": "BEMANI楽曲3D LIVE! 07"
+        },
+        {
+            "value": 850,
+            "type": "video",
+            "name": "BEMANI楽曲3D LIVE! 08"
+        },
+        {
+            "value": 851,
+            "type": "video",
+            "name": "BEMANI楽曲3D LIVE! 09"
+        },
+        {
+            "value": 852,
+            "type": "video",
+            "name": "Silent Flame,Never Fade 01"
+        },
+        {
+            "value": 853,
+            "type": "video",
+            "name": "Silent Flame,Never Fade 02"
+        },
+        {
+            "value": 854,
+            "type": "video",
+            "name": "Silent Flame,Never Fade 03"
+        },
+        {
+            "value": 855,
+            "type": "video",
+            "name": "Silent Flame,Never Fade 04"
+        },
+        {
+            "value": 856,
+            "type": "video",
+            "name": "Silent Flame,Never Fade 05"
+        },
+        {
+            "value": 857,
+            "type": "video",
+            "name": "架空と本当 01"
+        },
+        {
+            "value": 858,
+            "type": "video",
+            "name": "架空と本当 02"
+        },
+        {
+            "value": 859,
+            "type": "video",
+            "name": "架空と本当 03"
+        },
+        {
+            "value": 860,
+            "type": "video",
+            "name": "架空と本当 04"
+        },
+        {
+            "value": 861,
+            "type": "video",
+            "name": "架空と本当 05"
         }
     ],
     "bgm": [
@@ -4451,6 +4789,42 @@
         {
             "value": 92,
             "name": "{ eXLIPXe }"
+        },
+        {
+            "value": 93,
+            "name": "COLOR BURST"
+        },
+        {
+            "value": 94,
+            "name": "Meteor☆Shower"
+        },
+        {
+            "value": 95,
+            "name": "GO!"
+        },
+        {
+            "value": 96,
+            "name": "King of Tribe"
+        },
+        {
+            "value": 97,
+            "name": "RIZING-GAMERS."
+        },
+        {
+            "value": 98,
+            "name": "SILKY BRAVE"
+        },
+        {
+            "value": 99,
+            "name": "HORIZON BEATZ"
+        },
+        {
+            "value": 100,
+            "name": "Astra Blaze"
+        },
+        {
+            "value": 101,
+            "name": "No→to"
         }
     ],
     "stamp": [
@@ -13321,6 +13695,326 @@
         {
             "value": 2216,
             "name": "初音ミク 10 4"
+        },
+        {
+            "value": 2217,
+            "name": "おしゃべり恋刃 001 1"
+        },
+        {
+            "value": 2218,
+            "name": "おしゃべり恋刃 001 2"
+        },
+        {
+            "value": 2219,
+            "name": "おしゃべり恋刃 001 3"
+        },
+        {
+            "value": 2220,
+            "name": "おしゃべり恋刃 001 4"
+        },
+        {
+            "value": 2221,
+            "name": "おしゃべり恋刃 002 1"
+        },
+        {
+            "value": 2222,
+            "name": "おしゃべり恋刃 002 2"
+        },
+        {
+            "value": 2223,
+            "name": "おしゃべり恋刃 002 3"
+        },
+        {
+            "value": 2224,
+            "name": "おしゃべり恋刃 002 4"
+        },
+        {
+            "value": 2225,
+            "name": "おしゃべり恋刃 003 1"
+        },
+        {
+            "value": 2226,
+            "name": "おしゃべり恋刃 003 2"
+        },
+        {
+            "value": 2227,
+            "name": "おしゃべり恋刃 003 3"
+        },
+        {
+            "value": 2228,
+            "name": "おしゃべり恋刃 003 4"
+        },
+        {
+            "value": 2229,
+            "name": "おしゃべり恋刃 004 1"
+        },
+        {
+            "value": 2230,
+            "name": "おしゃべり恋刃 004 2"
+        },
+        {
+            "value": 2231,
+            "name": "おしゃべり恋刃 004 3"
+        },
+        {
+            "value": 2232,
+            "name": "おしゃべり恋刃 004 4"
+        },
+        {
+            "value": 2233,
+            "name": "おしゃべり紅刃 011 1"
+        },
+        {
+            "value": 2234,
+            "name": "おしゃべり紅刃 011 2"
+        },
+        {
+            "value": 2235,
+            "name": "おしゃべり紅刃 011 3"
+        },
+        {
+            "value": 2236,
+            "name": "おしゃべり紅刃 011 4"
+        },
+        {
+            "value": 2237,
+            "name": "おしゃべりグレイス 013 1"
+        },
+        {
+            "value": 2238,
+            "name": "おしゃべりグレイス 013 2"
+        },
+        {
+            "value": 2239,
+            "name": "おしゃべりグレイス 013 3"
+        },
+        {
+            "value": 2240,
+            "name": "おしゃべりグレイス 013 4"
+        },
+        {
+            "value": 2241,
+            "name": "おしゃべり雷刀 008 1"
+        },
+        {
+            "value": 2242,
+            "name": "おしゃべり雷刀 008 2"
+        },
+        {
+            "value": 2243,
+            "name": "おしゃべり雷刀 008 3"
+        },
+        {
+            "value": 2244,
+            "name": "おしゃべり雷刀 008 4"
+        },
+        {
+            "value": 2245,
+            "name": "おしゃべり烈風刀 008 1"
+        },
+        {
+            "value": 2246,
+            "name": "おしゃべり烈風刀 008 2"
+        },
+        {
+            "value": 2247,
+            "name": "おしゃべり烈風刀 008 3"
+        },
+        {
+            "value": 2248,
+            "name": "おしゃべり烈風刀 008 4"
+        },
+        {
+            "value": 2249,
+            "name": "おしゃべりマキシマ 008 1"
+        },
+        {
+            "value": 2250,
+            "name": "おしゃべりマキシマ 008 2"
+        },
+        {
+            "value": 2251,
+            "name": "おしゃべりマキシマ 008 3"
+        },
+        {
+            "value": 2252,
+            "name": "おしゃべりマキシマ 008 4"
+        },
+        {
+            "value": 2253,
+            "name": "おしゃべりつまぶき 009 1"
+        },
+        {
+            "value": 2254,
+            "name": "おしゃべりつまぶき 009 2"
+        },
+        {
+            "value": 2255,
+            "name": "おしゃべりつまぶき 009 3"
+        },
+        {
+            "value": 2256,
+            "name": "おしゃべりつまぶき 009 4"
+        },
+        {
+            "value": 2257,
+            "name": "不知火フレア（ホロライブ）01 1"
+        },
+        {
+            "value": 2258,
+            "name": "不知火フレア（ホロライブ）01 2"
+        },
+        {
+            "value": 2259,
+            "name": "不知火フレア（ホロライブ）01 3"
+        },
+        {
+            "value": 2260,
+            "name": "不知火フレア（ホロライブ）01 4"
+        },
+        {
+            "value": 2261,
+            "name": "不知火フレア（ホロライブ）02 1"
+        },
+        {
+            "value": 2262,
+            "name": "不知火フレア（ホロライブ）02 2"
+        },
+        {
+            "value": 2263,
+            "name": "不知火フレア（ホロライブ）02 3"
+        },
+        {
+            "value": 2264,
+            "name": "不知火フレア（ホロライブ）02 4"
+        },
+        {
+            "value": 2265,
+            "name": "不知火フレア（ホロライブ）03 1"
+        },
+        {
+            "value": 2266,
+            "name": "不知火フレア（ホロライブ）03 2"
+        },
+        {
+            "value": 2267,
+            "name": "不知火フレア（ホロライブ）03 3"
+        },
+        {
+            "value": 2268,
+            "name": "不知火フレア（ホロライブ）03 4"
+        },
+        {
+            "value": 2269,
+            "name": "不知火フレア（ホロライブ）04 1"
+        },
+        {
+            "value": 2270,
+            "name": "不知火フレア（ホロライブ）04 2"
+        },
+        {
+            "value": 2271,
+            "name": "不知火フレア（ホロライブ）04 3"
+        },
+        {
+            "value": 2272,
+            "name": "不知火フレア（ホロライブ）04 4"
+        },
+        {
+            "value": 2273,
+            "name": "不知火フレア（ホロライブ）05 1"
+        },
+        {
+            "value": 2274,
+            "name": "不知火フレア（ホロライブ）05 2"
+        },
+        {
+            "value": 2275,
+            "name": "不知火フレア（ホロライブ）05 3"
+        },
+        {
+            "value": 2276,
+            "name": "不知火フレア（ホロライブ）05 4"
+        },
+        {
+            "value": 2277,
+            "name": "不知火フレア（ホロライブ）06 1"
+        },
+        {
+            "value": 2278,
+            "name": "不知火フレア（ホロライブ）06 2"
+        },
+        {
+            "value": 2279,
+            "name": "不知火フレア（ホロライブ）06 3"
+        },
+        {
+            "value": 2280,
+            "name": "不知火フレア（ホロライブ）06 4"
+        },
+        {
+            "value": 2281,
+            "name": "不知火フレア（ホロライブ）07 1"
+        },
+        {
+            "value": 2282,
+            "name": "不知火フレア（ホロライブ）07 2"
+        },
+        {
+            "value": 2283,
+            "name": "不知火フレア（ホロライブ）07 3"
+        },
+        {
+            "value": 2284,
+            "name": "不知火フレア（ホロライブ）07 4"
+        },
+        {
+            "value": 2285,
+            "name": "不知火フレア（ホロライブ）08 1"
+        },
+        {
+            "value": 2286,
+            "name": "不知火フレア（ホロライブ）08 2"
+        },
+        {
+            "value": 2287,
+            "name": "不知火フレア（ホロライブ）08 3"
+        },
+        {
+            "value": 2288,
+            "name": "不知火フレア（ホロライブ）08 4"
+        },
+        {
+            "value": 2289,
+            "name": "不知火フレア（ホロライブ）09 1"
+        },
+        {
+            "value": 2290,
+            "name": "不知火フレア（ホロライブ）09 2"
+        },
+        {
+            "value": 2291,
+            "name": "不知火フレア（ホロライブ）09 3"
+        },
+        {
+            "value": 2292,
+            "name": "不知火フレア（ホロライブ）09 4"
+        },
+        {
+            "value": 2293,
+            "name": "不知火フレア（ホロライブ）10 1"
+        },
+        {
+            "value": 2294,
+            "name": "不知火フレア（ホロライブ）10 2"
+        },
+        {
+            "value": 2295,
+            "name": "不知火フレア（ホロライブ）10 3"
+        },
+        {
+            "value": 2296,
+            "name": "不知火フレア（ホロライブ）10 4"
         }
     ],
     "akaname": [
@@ -16765,8 +17459,150 @@
             "name": "電子の歌姫"
         },
         {
+            "value": "40303",
+            "name": "エルフレンド"
+        },
+        {
+            "value": "40304",
+            "name": "人間とエルフのハーフエルフ"
+        },
+        {
+            "value": "40305",
+            "name": "止まり木"
+        },
+        {
             "value": "50000",
             "name": "Custom"
+        }
+    ],
+    "sysbg": [
+        {
+            "id": 0,
+            "name": "Default"
+        },
+        {
+            "id": 1,
+            "name": "BOOTH"
+        },
+        {
+            "id": 2,
+            "name": "infinite infection"
+        },
+        {
+            "id": 3,
+            "name": "GRAVITY WARS"
+        },
+        {
+            "id": 4,
+            "name": "サウダージ・店内"
+        },
+        {
+            "id": 5,
+            "name": "サウダージ・外観"
+        },
+        {
+            "id": 6,
+            "name": "いずみ洋裁店・店内"
+        },
+        {
+            "id": 7,
+            "name": "いずみ洋裁店・外観"
+        },
+        {
+            "id": 8,
+            "name": "兎月堂・店内"
+        },
+        {
+            "id": 9,
+            "name": "兎月堂・外観"
+        },
+        {
+            "id": 10,
+            "name": "シャノワール・店内"
+        },
+        {
+            "id": 11,
+            "name": "シャノワール・外観"
+        },
+        {
+            "id": 12,
+            "name": "霜月書林・店内"
+        },
+        {
+            "id": 13,
+            "name": "霜月書林・外観"
+        },
+        {
+            "id": 14,
+            "name": "日向美商店街"
+        },
+        {
+            "id": 15,
+            "name": "倉野川城址公園"
+        },
+        {
+            "id": 16,
+            "name": "やまもり温泉"
+        },
+        {
+            "id": 17,
+            "name": "GRAVITY WARS 2nd Season"
+        },
+        {
+            "id": 18,
+            "name": "HEAVENLY HAVEN"
+        },
+        {
+            "id": 19,
+            "name": "VIVID WAVE"
+        },
+        {
+            "id": 20,
+            "name": "EXCEED GEAR"
+        },
+        {
+            "id": 21,
+            "name": "EXCEED GEAR セカンドシーズン 01"
+        },
+        {
+            "id": 22,
+            "name": "EXCEED GEAR セカンドシーズン 02"
+        },
+        {
+            "id": 23,
+            "name": "ΩDimension(幽霊船)"
+        },
+        {
+            "id": 24,
+            "name": "ΩDimension(ココロの欠片)"
+        },
+        {
+            "id": 25,
+            "name": "ΩDimension(神の試煉)"
+        },
+        {
+            "id": 26,
+            "name": "HEXA DIVER(Abnormal)"
+        },
+        {
+            "id": 27,
+            "name": "HEXA DIVER(Normal)"
+        },
+        {
+            "id": 28,
+            "name": "HEXA DIVER(DimiourGEAR)"
+        },
+        {
+            "id": 29,
+            "name": "BPLS2 ネメシスアリーナ"
+        },
+        {
+            "id": 30,
+            "name": "BPLS3 ネメシスアリーナ"
+        },
+        {
+            "id": 31,
+            "name": "BPLS5 ネメシスアリーナ"
         }
     ]
 }

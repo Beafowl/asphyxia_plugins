@@ -5,10 +5,6 @@
 -
 link(rel="stylesheet" href="static/asset/css/datatables.css")
 div
-  // Inline status banner for add/remove feedback. Hidden until rivals.js
-  // populates it so the page doesn't open with a stale notification.
-  div#rival-status-banner(style="display:none")
-
   .card
     .card-header
       p.card-header-title
@@ -28,25 +24,8 @@ div
             select.select(id="profilelist")
               option(value=0) Choose profile
       .field
-        button.button.is-primary(type="submit" id="addrival")
+        button.button.is-primary(type="submit" id="addrival") 
           span(id="rival-button") Add Rival
-
-  .card
-    .card-header
-      p.card-header-title
-        span.icon
-          i.mdi.mdi-account-multiple
-        | Your Rivals
-    .card-content
-      p#rivals-empty.has-text-grey(style="display:none") No rivals selected for this version yet.
-      table.table.is-fullwidth(id="rivals-list-table" style="display:none")
-        thead
-          tr
-            th SDVX ID
-            th Name
-            th Mutual
-            th(style="width:1%")
-        tbody#rivals-list-body
 
   .card
     .card-header
@@ -64,7 +43,7 @@ div
 
       table.table(id="scorecompare" style="width:100%")
         thead
-          tr
+          tr    
             th ID
             th Song
             th Difficulty
@@ -77,5 +56,5 @@ div
 div(hidden id='rivals-pass') !{JSON.stringify(rivals)}
 div(hidden id='profile-pass') !{JSON.stringify(yourprofile)}
 div(hidden id='profiles-pass') !{JSON.stringify(profiles)}
-script(src="static/asset/js/rivals.js")
+script(src="static/asset/js/rivals.js") 
 script(src="static/asset/js/datatables.js")

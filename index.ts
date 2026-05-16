@@ -12,7 +12,8 @@ import {
   manageStartupFlags,
   addWeekly,
   getWeekRankList,
-  updateScore
+  updateScore,
+  getDateCode
 } from './handlers/webui';
 import {
   load,
@@ -24,7 +25,8 @@ import {
   buy,
   print,
   saveValgene,
-  saveE
+  saveE,
+  savePb
 } from './handlers/profiles';
 import {
   nauticaBrowse,
@@ -51,7 +53,7 @@ import {
 } from './handlers/nautica';
 import { ARENA_STATION_ITEMS } from './data/exg';
 import { ARENA_STATION_ITEMS7 } from './data/nbl';
-import { dataUpdate } from './handlers/migrate'
+import { dataUpdate } from './handlers/migrate';
 
 export function register() {
 
@@ -63,6 +65,7 @@ export function register() {
   R.Config('use_blasterpass',{ type: 'boolean', default: true, name:'Use BLASTER PASS', desc:''});
   R.Config('arena_no_endtime',{ type: 'boolean', default: true, name: 'Keep ARENA running', desc: 'Choose whether to keep the latest ARENA season running past the end date.'});
   R.Config('arena_station',{ type: 'string', options: Object.keys({...ARENA_STATION_ITEMS, ...ARENA_STATION_ITEMS7}), default: 'None', name: 'ARENA STATION set', desc: 'Choose which set of ARENA STATION items are available for purchase during ARENA (EXCEED GEAR only)'});
+  R.Config('arena_station7',{ type: 'string', options: Object.keys(ARENA_STATION_ITEMS7), default: 'None', name: 'ARENA STATION set', desc: 'Choose which set of ARENA STATION items are available for purchase during ARENA (∇ only)'});
   R.Config('unlock_all_valk_items', { type: 'boolean', default: false, name:'Unlock Customization Items', desc: 'Unlock most customization items (Navigators not included; check \'unlock all navigators\' option)'});
   R.Config('unlock_all_songs', { type: 'boolean', default: false, name:'Unlock All Songs'});
   R.Config('unlock_all_navigators', { type: 'boolean', default: false, name:'Unlock All Navigators'} );
@@ -78,6 +81,15 @@ export function register() {
   R.Config('sdvx_drive_folder_id', { type: 'string', needRestart: false, default: '', name: 'Drive Folder ID', desc: 'The target Google Drive folder ID (the last segment of the folder URL). Uploads go into this folder under your own Google account, counting against your personal Drive quota.'});
   R.Config('sdvx_chrome_path', { type: 'string', needRestart: false, default: '', name: 'Chrome / Chromium / Edge executable', desc: 'Absolute path to a Chromium-based browser used to render the VF Top 50 PNG endpoint (/api/sdvx/vf-top-50/<refid>.png). Leave empty to auto-detect Chrome and Edge on Windows / macOS / Linux. Only needed if auto-detect fails or you want a specific install.'});
 
+  R.DataFile('./webui/asset/uploads/1_mdb.xml', {name: 'music_db.xml (BOOTH)', accept: 'text/xml, .xml'});
+  R.DataFile('./webui/asset/uploads/2_mdb.xml', {name: 'music_db.xml (infinite infection)', accept: 'text/xml, .xml'});
+  // R.DataFile('./webui/asset/uploads/3_mdb.xml', {name: 'music_db.xml (GRAVITY WARS)', accept: 'text/xml, .xml'});
+  // R.DataFile('./webui/asset/uploads/4_mdb.xml', {name: 'music_db.xml (HEAVENLY HAVEN)', accept: 'text/xml, .xml'});
+  // R.DataFile('./webui/asset/uploads/5_mdb.xml', {name: 'music_db.xml (VIVID WAVE)', accept: 'text/xml, .xml'});
+  R.DataFile('./webui/asset/uploads/6_mdb.xml', {name: 'music_db.xml (EXCEED GEAR)', accept: 'text/xml, .xml'});
+  R.DataFile('./webui/asset/uploads/7_mdb.xml', {name: 'music_db.xml (∇)', accept: 'text/xml, .xml'});
+  R.DataFile('./webui/asset/uploads/0_mdb.xml', {name: 'music_db.xml (Omnimix)', desc: 'SDVX7 compatible mdb', accept: 'text/xml, .xml'});
+
   R.WebUIEvent('copyResourcesFromGame', copyResourcesFromGame);
   R.WebUIEvent('extractJackets', extractJackets);
   R.WebUIEvent('getRivalScores', getRivalScores);
@@ -90,6 +102,7 @@ export function register() {
   R.WebUIEvent('updateScore', updateScore);
   R.WebUIEvent('addWeekly', addWeekly);
   R.WebUIEvent('getWeekRankList', getWeekRankList);
+  R.WebUIEvent('getDateCode', getDateCode);
   R.WebUIEvent('nauticaBrowse', nauticaBrowse);
   R.WebUIEvent('nauticaApprove', nauticaApprove);
   R.WebUIEvent('nauticaRemove', nauticaRemove);
@@ -113,6 +126,8 @@ export function register() {
 
   const MultiRoute = (method: string, handler: EPR | boolean) => {
     // Helper for register multiple versions.
+    R.Route(`game.${method}`, handler);
+    R.Route(`game_2.${method}`, handler);
     R.Route(`game.sv6_${method}`, handler);
     R.Route(`game.sv7_${method}`, handler);
   };
@@ -127,6 +142,7 @@ export function register() {
   MultiRoute('save', save);
   MultiRoute('save_m', saveScore);
   MultiRoute('save_c', saveCourse);
+  MultiRoute('save_pb', savePb);
   MultiRoute('save_valgene', saveValgene);
   MultiRoute('frozen', true);
   MultiRoute('buy', buy);
@@ -149,25 +165,25 @@ export function register() {
   MultiRoute('entry_e', entryE);
   MultiRoute('exception', true);
   MultiRoute('log',log);
- 
+
   R.Route('eventlog.write', (_, __, send) => send.object({
     gamesession: K.ITEM('s64', BigInt(1)),
     logsendflg: K.ITEM('s32', 0),
     logerrlevel: K.ITEM('s32', 0),
     evtidnosendflg: K.ITEM('s32', 0)
   }));
-  
+
   R.Route('package.list',(_,__,send)=>send.object({
       package:K.ATTR({expire:"1200"},{status:"1"})
   }));
-  
+
   R.Route('ins.netlog', (_, __, send) => send.object({
     //gamesession: K.ITEM('s64', BigInt(1)),
     //logsendflg: K.ITEM('s32', 0),
     //logerrlevel: K.ITEM('s32', 0),
     //evtidnosendflg: K.ITEM('s32', 0)
   }));
-  
+
   R.Unhandled(undefined)
 
   dataUpdate()

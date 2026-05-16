@@ -4,6 +4,7 @@ export interface Profile {
   pluginVer: number;
   version: number;
   dbver: number;
+  datecode: number;
 
   id: number;
   name: string;
@@ -32,11 +33,11 @@ export interface Profile {
   effCLeft: number;
   effCRight: number;
   narrowDown: number;
-  
+
   bgm: number;
   subbg: number;
   nemsys: number;
-  
+
   stampA: number;
   stampB: number;
   stampC: number;
@@ -48,6 +49,10 @@ export interface Profile {
   sysBG: number;
 
   boothFrame: number[];
+  haveItem: number[];
+  haveNote: number[];
+
+  blasterCount: number;
 
   playCount: number;
   dayCount: number;

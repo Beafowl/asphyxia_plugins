@@ -1,212 +1,191 @@
-import { COURSES6 } from '../data/exg';
-import { MEGAMIX_SONGS, MEGAMIX_SONGS_2, MEGAMIX_SONGS_3, MEGAMIX_SONGS_4 } from '../data/exg';
-import { VariantPower } from '../models/variant';
-import { Profile } from '../models/profile';
-import { Arena } from '../models/arena';
-import { MusicRecord } from '../models/music_record';
-import { CourseRecord } from '../models/course_record';
-import { computeForce, loadMusicDb } from '../utils';
-import { Item } from '../models/item';
-import { Param } from '../models/param';
-import { Rival } from '../models/rival';
-import { Skill } from '../models/skill';
-import { WeeklyMusicScore } from '../models/weeklymusic';
+import { HAVE_NOTE } from "../data/ii"
+import { COURSES6, MEGAMIX_SONGS, MEGAMIX_SONGS_2, MEGAMIX_SONGS_3, MEGAMIX_SONGS_4 } from "../data/exg"
+import { VariantPower } from "../models/variant"
+import { Profile } from "../models/profile"
+import { Arena } from "../models/arena"
+import { MusicRecord } from "../models/music_record"
+import { CourseRecord } from "../models/course_record"
+import { computeForce, loadMusicDb } from "../utils"
+import { Item } from '../models/item'
+import { Param } from '../models/param'
+import { Rival } from '../models/rival'
+import { Skill } from '../models/skill'
+import { WeeklyMusicScore } from '../models/weeklymusic'
 
-export const DB_VER = 1;
-const dev = false;
+export const DB_VER = 1
+const dev = false
 
 export async function dataUpdate() {
-  if (dev) {
-    console.log(
-      MEGAMIX_SONGS.join(',').length +
-        ' ' +
-        MEGAMIX_SONGS_2.join(',').length +
-        ' ' +
-        MEGAMIX_SONGS_3.join(',').length +
-        ' ' +
-        MEGAMIX_SONGS_4.join(',').length
-    );
-    let mergeMega = MEGAMIX_SONGS.concat(MEGAMIX_SONGS_2, MEGAMIX_SONGS_3, MEGAMIX_SONGS_4);
-    let newSongs = [];
-    let megamixFiles = (
-      await IO.ReadDir(U.GetConfig('sdvx_eg_root_dir') + '/data/sound/automa/waves/')
-    )
-      .filter(file => file.name.includes('wave_info_megamix'))
-      .filter(file => file.name.includes('.xml'));
-    for (const file of megamixFiles) {
-      let megamixSongs = U.parseXML(
-        U.DecodeString(
-          await IO.ReadFile(
-            U.GetConfig('sdvx_eg_root_dir') + '/data/sound/automa/waves/' + file.name
-          ),
-          'shift_jis'
-        ),
-        false
-      );
-      for (const m of megamixSongs.wave_info.mdb.music) {
-        let mid = parseInt(m.meta.music_id['@content']);
-        if (!mergeMega.includes(mid) && !newSongs.includes(mid)) {
-          console.log(file.name + ': new song - ' + mid);
-          newSongs.push(mid);
-        }
-      }
-    }
-  }
+	if(dev) {
+		console.log(MEGAMIX_SONGS.join(',').length + " " + MEGAMIX_SONGS_2.join(',').length + " " + MEGAMIX_SONGS_3.join(',').length + " " + MEGAMIX_SONGS_4.join(',').length)
+		let mergeMega = MEGAMIX_SONGS.concat(MEGAMIX_SONGS_2, MEGAMIX_SONGS_3, MEGAMIX_SONGS_4)
+		let newSongs = []
+		let megamixFiles = (await IO.ReadDir(U.GetConfig('sdvx_eg_root_dir') + "/data/sound/automa/waves/")).filter(file => file.name.includes("wave_info_megamix")).filter(file => file.name.includes('.xml'))
+		for (const file of megamixFiles) {
+			let megamixSongs = U.parseXML(U.DecodeString(await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/sound/automa/waves/" + file.name), "shift_jis"), false)
+			for (const m of megamixSongs.wave_info.mdb.music) {
+				let mid = parseInt(m.meta.music_id['@content'])
+				if(!mergeMega.includes(mid) && !newSongs.includes(mid)) {
+					console.log(file.name + ": new song - " + mid)
+					newSongs.push(mid)
+				}
+			}
+		}
+	}
 
-  await updateSkillCourseIds();
-  await updateDB();
-  await repairNablaPucClears();
+	await updateSkillCourseIds()
+	await updateDB()
+	await repairNablaPucClears()
 }
 
 async function updateSkillCourseIds() {
-  // old skill analyzer migrate code
-  let courseData = await DB.Find(null, { collection: 'course', dbver: { $exists: false } });
-  let skillData;
-  courseData.forEach(async course => {
-    skillData = COURSES6.find(sd => sd.id === course['sid']);
-    if (skillData && 'courses' in skillData) {
-      let courseIndex = skillData['courses'].findIndex(
-        cd => parseInt('' + skillData.id + cd.id) === course['cid']
-      );
-      if (courseIndex === -1) {
-        console.log(
-          'old: (' +
-            course['__refid'] +
-            ') updating cid ' +
-            course['cid'] +
-            ' -> ' +
-            parseInt('' + skillData.id + course['cid'])
-        );
-        await DB.Upsert(
-          course['__refid'],
-          { collection: 'course', sid: course['sid'], cid: course['cid'] },
-          {
-            $set: {
-              cid: parseInt('' + skillData.id + course['cid']),
-            },
-          }
-        );
-      }
-    }
-  });
+	// old skill analyzer migrate code
+	let courseData = await DB.Find(null, {collection: 'course', dbver: {$exists: false}})
+	let skillData
+	courseData.forEach(async course => {
+		skillData = COURSES6.find(sd => sd.id === course['sid'])
+		if(skillData && 'courses' in skillData) {
+			let courseIndex = skillData['courses'].findIndex(cd => parseInt('' + skillData.id + cd.id) === course['cid'])
+			if(courseIndex === -1) {
+				console.log("old: (" + course['__refid'] + ") updating cid " + course['cid'] + " -> " + parseInt('' + skillData.id + course['cid']))
+				await DB.Upsert(course['__refid'], {collection: 'course', sid: course['sid'], cid: course['cid']}, {
+					$set: {
+						cid: parseInt('' + skillData.id + course['cid'])
+					}
+				})
+			}
+		}
+	})
 }
 
 async function updateDB() {
-  // update collections
+	// update collections
 
-  // dbver 1
-  let varPower = await DB.Find<VariantPower>(null, {
-    collection: 'variantpower',
-    $or: [{ dbver: 1 }, { dbver: { $exists: false } }],
-  });
-  varPower.forEach(async vp => {
-    await DB.Upsert<VariantPower>(
-      vp['__refid'],
-      { collection: 'variantpower' },
-      {
-        $set: {
-          overRadar: !vp['overRadar'] ? [] : vp['overRadar'],
-          dbver: 1,
-        },
-      }
-    );
-  });
+	// dbver 1
+	let varPower = await DB.Find<VariantPower>(null, {collection: 'variantpower', $or: [{dbver: 1}, {dbver: {$exists: false}}]})
+	varPower.forEach(async vp => {
+		await DB.Upsert<VariantPower>(vp['__refid'], {collection: 'variantpower'}, {
+			$set: {
+				overRadar: (!vp['overRadar']) ? [] : vp['overRadar'],
+				dbver: 1
+			}
+		})
+	})
 
-  let profiles = await DB.Find<Profile>(null, { collection: 'profile', dbver: { $exists: false } });
-  profiles.forEach(async profile => {
-    await DB.Update<Profile>(
-      profile['__refid'],
-      { collection: 'profile' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-    await DB.Update<Arena>(
-      profile['__refid'],
-      { collection: 'arena' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-    await DB.Update<MusicRecord>(
-      profile['__refid'],
-      { collection: 'music' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-    await DB.Update<CourseRecord>(
-      profile['__refid'],
-      { collection: 'course' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-    await DB.Update<Item>(
-      profile['__refid'],
-      { collection: 'item' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-    await DB.Update<Param>(
-      profile['__refid'],
-      { collection: 'param' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-    await DB.Update<Rival>(
-      profile['__refid'],
-      { collection: 'rival' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-    await DB.Update<Skill>(
-      profile['__refid'],
-      { collection: 'skill' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-    await DB.Update<VariantPower>(
-      profile['__refid'],
-      { collection: 'variantpower' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-    await DB.Update<WeeklyMusicScore>(
-      profile['__refid'],
-      { collection: 'weeklymusicscore' },
-      { $set: { version: 6, dbver: 1 } }
-    );
-  });
+	let profiles = await DB.Find<Profile>(null, {collection: 'profile', dbver: {$exists: false}})
+	profiles.forEach(async profile => {
+		await DB.Update<Profile>(profile['__refid'], {collection: 'profile'}, { $set: { version: 6, dbver: 1 }})
+		await DB.Update<Arena>(profile['__refid'], {collection: 'arena'}, { $set: { version: 6, dbver: 1 }})
+		await DB.Update<MusicRecord>(profile['__refid'], {collection: 'music'}, { $set: { version: 6, dbver: 1 }})
+		await DB.Update<CourseRecord>(profile['__refid'], {collection: 'course'}, { $set: { version: 6, dbver: 1 }})
+		await DB.Update<Item>(profile['__refid'], {collection: 'item'}, { $set: { version: 6, dbver: 1 }})
+		await DB.Update<Param>(profile['__refid'], {collection: 'param'}, { $set: { version: 6, dbver: 1 }})
+		await DB.Update<Rival>(profile['__refid'], {collection: 'rival'}, { $set: { version: 6, dbver: 1 }})
+		await DB.Update<Skill>(profile['__refid'], {collection: 'skill'}, { $set: { version: 6, dbver: 1 }})
+		await DB.Update<VariantPower>(profile['__refid'], {collection: 'variantpower'}, { $set: { version: 6, dbver: 1 }})
+		await DB.Update<WeeklyMusicScore>(profile['__refid'], {collection: 'weeklymusicscore'}, { $set: { version: 6, dbver: 1 }})
+	})
 
-  let courseData = await DB.Find<CourseRecord>(null, {
-    collection: 'course',
-    version: 6,
-    dbver: { $exists: false },
-  });
-  let skillData;
-  courseData.forEach(async course => {
-    skillData = COURSES6.find(sd => sd.id === course['sid']);
-    if (skillData && 'courses' in skillData) {
-      let courseIndex = skillData['courses'].findIndex(
-        cd => parseInt('' + skillData.id + cd.id) === course['cid']
-      );
-      if (courseIndex !== -1) {
-        console.log(
-          'new - (' +
-            course['__refid'] +
-            ') updating cid ' +
-            course['cid'] +
-            ' -> ' +
-            course['cid'].toString().slice(skillData.id.toString().length) +
-            ' (sid ' +
-            course['sid'] +
-            ')'
-        );
-        await DB.Upsert(
-          course['__refid'],
-          {
-            collection: 'course',
-            sid: course['sid'],
-            cid: parseInt('' + skillData.id + skillData['courses'][courseIndex].id),
-          },
-          {
-            $set: {
-              cid: parseInt(course['cid'].toString().slice(skillData.id.toString().length)),
-              dbver: 1,
-            },
-          }
-        );
-      }
-    }
-  });
+	let courseData = await DB.Find<CourseRecord>(null, {collection: 'course', version: 6, dbver: {$exists: false}})
+	let skillData
+	courseData.forEach(async course => {
+		skillData = COURSES6.find(sd => sd.id === course['sid'])
+		if(skillData && 'courses' in skillData) {
+			let courseIndex = skillData['courses'].findIndex(cd => parseInt('' + skillData.id + cd.id) === course['cid'])
+			if(courseIndex !== -1) {
+				console.log("new - (" + course['__refid'] + ") updating cid " + course['cid'] + " -> " + course['cid'].toString().slice(skillData.id.toString().length) + " (sid " + course['sid'] + ")")
+				await DB.Upsert(course['__refid'], {collection: 'course', sid: course['sid'], cid: parseInt('' + skillData.id + skillData['courses'][courseIndex].id)}, {
+					$set: {
+						cid: parseInt(course['cid'].toString().slice(skillData.id.toString().length)),
+						dbver: 1
+					}
+				})
+			}
+		}
+	})
+
+	// move customization settings to param
+	profiles = await DB.Find<Profile>(null, {collection: 'profile', bgm: {$exists: true}})
+	profiles.forEach(async profile => {
+		let customParam = await DB.FindOne<Param>(profile['__refid'], {collection: 'param', type: 2, id: 2, version: profile['version']})
+		let customize = (!customParam) ? [0, 0, (profile['version'] === 7 ? 47 : 0), 0, 0, 0, 0, 0, 0, 0, 0, 0] : customParam.param
+		const custMig = [profile['bgm'], profile['subbg'], (profile['version'] === 7 && profile['nemsys'] === 0 ? 47 : profile['nemsys'] ), profile['stampA'], profile['stampB'], profile['stampC'], profile['stampD'], profile['stampRA'], profile['stampRB'], profile['stampRC'], profile['stampRD'], profile['sysBG']]
+		custMig.forEach((c, ind) => {
+			customize[ind] = c
+		})
+		await DB.Upsert<Param>(profile['__refid'], {collection: 'param', type: 2, id: 2, version: profile['version']}, {$set: {param: customize}})
+		await DB.Update<Profile>(profile['__refid'], {collection: 'profile', version: profile['version']}, {$unset: {bgm: true, subbg: true, nemsys: true, stampA: true, stampB: true, stampC: true, stampD: true, stampRA: true, stampRB: true, stampRC: true, stampRD: true, sysBG: true}})
+	})
+}
+
+export async function iiMigrate(refid) {
+	console.log("Migrating profile from BOOTH to ii")
+	let profileData = await DB.FindOne<Profile>(refid, {collection: 'profile', version: 1})
+	await DB.Upsert<Profile>(refid, {collection: 'profile', version: 2}, {
+		$set: {
+			pluginVer: 1,
+			dbver: DB_VER,
+
+			collection: 'profile',
+			id: profileData.id,
+			name: profileData.name,
+			appeal: 0,
+			akaname: 0,
+			blocks: 0,
+			packets: 0,
+			arsOption: 0,
+			drawAdjust: 0,
+			earlyLateDisp: 0,
+			effCLeft: 0,
+			effCRight: 0,
+			gaugeOption: 0,
+			hiSpeed: profileData.hiSpeed,
+			laneSpeed: profileData.laneSpeed,
+			narrowDown: 0,
+			notesOption: 0,
+			blasterEnergy: 0,
+
+			headphone: 0,
+			musicID: 0,
+			musicType: 0,
+			sortType: 0,
+			expPoint: 0,
+			mUserCnt: 0,
+			boothFrame: [0, 0, 0, 0, 0],
+
+			playCount: 0,
+			dayCount: 0,
+			todayCount: 0,
+			playchain: 0,
+			maxPlayChain: 0,
+			weekCount: 0,
+			weekPlayCount: 0,
+			weekChain: 0,
+			maxWeekChain: 0,
+
+			bplSupport: 0,
+			creatorItem: 0
+		}
+	})
+
+
+	let haveItem = profileData.haveItem
+	for(let apId = 37; apId <= 256; apId++) {
+		if(haveItem[apId]) await DB.Upsert<Item>(refid, {collection: 'item', version: 2, type: 1, id: apId - 36}, {
+			$set: {
+				param: 0,
+				dbver: DB_VER
+			}
+		})
+	}
+
+	for(const [ind, have] of HAVE_NOTE.entries()) {
+		if(Boolean(profileData.haveNote[ind])) await DB.Upsert(refid, {collection: 'item', version: 2, type: 0, id: have.id}, {
+			$set: {
+				param: have.param
+			}
+		})
+	}
 }
 
 export async function nablaMigrate(refid) {

@@ -225,7 +225,7 @@
                 20230223,
                 20230302
             ],
-            "desc": "Songs revealed for the BEMANI Pro League Season 2 sightread challenges.<br>Toggle to have the songs from their corresponding week unlocked on the next login.<br>Otherwise, the songs are still unlockable through BLASTER GATE.",
+            "desc": "Songs revealed for the BEMANI PRO LEAGUE Season 2 sightread challenges.<br>Toggle to have the songs from their corresponding week unlocked on the next login.<br>Otherwise, the songs are still unlockable through BLASTER GATE.",
             "info": [
                 "Week 1 songs: 'Chat perché' and 'WINNING ROAD'",
                 "Week 2 songs: 'ENDGAME' and 'ИADIR'",
@@ -406,7 +406,7 @@
                 20240307,
                 20240314
             ],
-            "desc": "Songs revealed for the BEMANI Pro League Season 3 sightread challenges.<br>Toggle to have the songs from their corresponding week unlocked on the next login.<br>Otherwise, the songs are still unlockable through BLASTER GATE.",
+            "desc": "Songs revealed for the BEMANI PRO LEAGUE Season 3 sightread challenges.<br>Toggle to have the songs from their corresponding week unlocked on the next login.<br>Otherwise, the songs are still unlockable through BLASTER GATE.",
             "info": [
                 "Week 1 songs: 'We Are All The Dreamer' and 'Double or Nothing'",
                 "Week 2 songs: 'トリコエリヌム▽コンチェルト,' '群青纏う朱の槍,' and 'CHOVERY GOOSE!!!'",
@@ -586,7 +586,7 @@
             "name": "hololive SUPER EXPO 2025出展記念!コラボスタンプ",
             "version": 20250218,
             "start": 20250220,
-            "desc": "Stamp events to get hololive appeal cards and appeal titles. Play songs by Shirakami Fubuki, Nekomata Okayu, Tsunomaki Watame, Houshou Marine and Usada Pekora to earn stamps.",
+            "desc": "Stamp events to get hololive appeal cards and appeal titles. Play songs featuring Shirakami Fubuki, Nekomata Okayu, Tsunomaki Watame, Houshou Marine and Usada Pekora to earn stamps.",
             "info": "Toggle this on to enable the stamp events."
         },
         {
@@ -796,6 +796,16 @@
     ],
     "events7": [
         {
+            "id": "nblweeklystamp",
+            "type": "stamp",
+            "enabled": true,
+            "name": "∇ Weekly Stamp Bonus",
+            "version": 20251224,
+            "start": 20251224,
+            "desc": "Stamp event to unlock appeal stickers, and gain PC and BLC. Consecutive sheets will appear when the previous one is complete. (18 stamp sheets in total)",
+            "info": "Toggle this on to enable/disable this stamp event."
+        },
+        {
             "id": "gitadorastamp",
             "type": "stamp",
             "enabled": true,
@@ -817,7 +827,10 @@
                 20260113,
                 20260127,
                 20260203,
-                20260203
+                20260203,
+                20260217,
+                20260217,
+                20260303
             ],
             "start": [
                 20251225,
@@ -826,17 +839,23 @@
                 20260122,
                 20260129,
                 20260205,
-                20260212
+                20260212,
+                20260219,
+                20260226,
+                20260305
             ],
-            "desc": "Songs revealed for the BEMANI Pro League Season 5 sightread challenges.<br>Toggle to have the songs from their corresponding week unlocked on the next login.<br>Otherwise, the songs are still unlockable through BLASTER GATE a week after release.",
+            "desc": "Songs revealed for the BEMANI PRO LEAGUE Season 5 sightread challenges.<br>Toggle to have the songs from their corresponding week unlocked on the next login.<br>Otherwise, the songs are still unlockable through BLASTER GATE a week after release.",
             "info": [
-                "Week 5 song: 'ИEXTAGE'",
-                "Week 6 song: 'CAKE,Cake'n Cake!'",
-                "Week 7 song: '天鯨譚'",
-                "Week 8 song: '華麗なる一撃'",
-                "Week 9 song: 'Veins Resonance'",
-                "Week 10 song: 'ShowDawn'",
-                "Week 11 song: '????'"
+                "Week 5 song: '[mid:2318]'",
+                "Week 6 song: '[mid:2319]'",
+                "Week 7 song: '[mid:2320]'",
+                "Week 8 song: '[mid:2321]'",
+                "Week 9 song: '[mid:2322]'",
+                "Week 10 song: '[mid:2323]'",
+                "Week 11 song: '[mid:2324]'",
+                "Week 12 song: '[mid:2325]'",
+                "Week 13 song: '[mid:2326]'",
+                "Week 14 song: '[mid:2327]'"
             ]
         },
         {
@@ -958,7 +977,10 @@
                 20251224,
                 20251224,
                 20251224,
-                20251224
+                20251224,
+                20260217,
+                20260217,
+                20260217
             ],
             "start": [
                 20251224,
@@ -972,22 +994,28 @@
                 20251224,
                 20251224,
                 20251224,
-                20251224
+                20251224,
+                20260219,
+                20260219,
+                20260219
             ],
             "desc": "Crossover event between SOUND VOLTEX and Polaris Chord<br>Toggle the corresponding songs' option below to automatically unlock them on your next login. (EG/∇)",
             "info": [
-                "Song 1: 'Crossfade'",
-                "Song 2: '星界のアルペジオ'",
-                "Song 3: 'Ö＜3rf10₩'",
-                "Song 4: 'ぐしゃ'",
-                "Song 5: 'Dear Deer'",
-                "Song 6: 'DISTORDER'",
-                "Song 7: 'HOLOGRAPHY'",
-                "Song 8: 'Like the Starlight'",
-                "Song 9: 'FRENZY HEART'",
-                "Song 10: 'フラッフィー・アドベンチャー！'",
-                "Song 11: 'Temporal Veil'",
-                "Song 12: '555 (Please call me “Go! Go! Go!”)'"
+                "Song 1: '[mid:2231]'",
+                "Song 2: '[mid:2232]'",
+                "Song 3: '[mid:2233]'",
+                "Song 4: '[mid:2260]'",
+                "Song 5: '[mid:2262]'",
+                "Song 6: '[mid:2262]'",
+                "Song 7: '[mid:2284]'",
+                "Song 8: '[mid:2285]'",
+                "Song 9: '[mid:2286]'",
+                "Song 10: '[mid:2339]'",
+                "Song 11: '[mid:2340]'",
+                "Song 12: '[mid:2341]'",
+                "Song 13: '[mid:2370]'",
+                "Song 14: '[mid:2371]'",
+                "Song 15: '[mid:2372]'"
             ]
         },
         {
@@ -1061,103 +1089,43 @@
             "info": "Toggle this on to enable/disable this stamp event."
         },
         {
-            "id": "nblstampbonus1",
+            "id": "hololive7",
             "type": "stamp",
             "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #1",
-            "version": 20251224,
-            "start": 20251224,
-            "desc": "Stamp event to unlock the 'つまぶきサンタ' appeal sticker, and gain PC and BLC.",
+            "name": "hololive Collab Stamp Bonus Event",
+            "version": 20260217,
+            "start": 20260219,
+            "desc": "A rerun of the hololive stamp bonus events to get hololive appeal cards and appeal titles, as well as new appeal board stickers.<br>Play songs featuring Shirakami Fubuki, Nekomata Okayu, Tsunomaki Watame, Houshou Marine and Usada Pekora to earn stamps.<br>If you already obtained the items included in the stamp sheet from the previous event, 1000pc will be obtained instead.",
             "info": "Toggle this on to enable/disable this stamp event."
         },
         {
-            "id": "nblstampbonus2",
+            "id": "whiteday2026",
             "type": "stamp",
             "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #2",
-            "version": 20251224,
-            "start": 20260101,
-            "desc": "Stamp event to unlock the '鏡ﾓﾁｭ' appeal sticker, and gain PC and BLC.",
+            "name": "White Day 2026 Stamp Event",
+            "version": 20260303,
+            "start": 20260312,
+            "desc": "Stamp event to unlock White Day themed Appeal Cards.",
             "info": "Toggle this on to enable/disable this stamp event."
         },
         {
-            "id": "nblstampbonus3",
+            "id": "bpls5stamp",
             "type": "stamp",
             "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #3",
-            "version": 20251224,
-            "start": 20260108,
-            "desc": "Stamp event to gain PC and BLC.",
+            "name": "BEMANI PRO LEAGUE -SEASON 5- Special Stamp",
+            "version": 20260324,
+            "start": 20260326,
+            "desc": "Stamp event to unlock 12 songs, featuring the BPL S5 theme songs + BPL S5 sightread songs including KISKIL-LILLA. There are 3 batches of stamp sheets (8 songs / 3 songs / 1 song,) where they only appear after completing the previous batch.",
             "info": "Toggle this on to enable/disable this stamp event."
         },
         {
-            "id": "nblstampbonus4",
+            "id": "shiranuiflare",
             "type": "stamp",
             "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #4",
-            "version": 20260113,
-            "start": 20260115,
-            "desc": "Stamp event to unlock the '14th anniversary!' appeal sticker, and gain PC and BLC.",
-            "info": "Toggle this on to enable/disable this stamp event."
-        },
-        {
-            "id": "nblstampbonus5",
-            "type": "stamp",
-            "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #5",
-            "version": 20260113,
-            "start": 20260122,
-            "desc": "Stamp event to unlock the '雪だるマキシマ' appeal sticker, and gain PC and BLC.",
-            "info": "Toggle this on to enable/disable this stamp event."
-        },
-        {
-            "id": "nblstampbonus6",
-            "type": "stamp",
-            "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #6",
-            "version": 20260113,
-            "start": 20260129,
-            "desc": "Another stamp event to gain PC and BLC.",
-            "info": "Toggle this on to enable/disable this stamp event."
-        },
-        {
-            "id": "nblstampbonus7",
-            "type": "stamp",
-            "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #7",
-            "version": 20260203,
-            "start": 20260205,
-            "desc": "Stamp event to unlock the 'Onigo' jacket appeal sticker, and gain PC and BLC.",
-            "info": "Toggle this on to enable/disable this stamp event."
-        },
-        {
-            "id": "nblstampbonus8",
-            "type": "stamp",
-            "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #8",
-            "version": 20260203,
-            "start": 20260209,
-            "desc": "Stamp event to unlock the 'チョコぶき' appeal sticker, and gain PC and BLC.",
-            "info": "Toggle this on to enable/disable this stamp event."
-        },
-        {
-            "id": "nblstampbonus9",
-            "type": "stamp",
-            "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #9",
-            "version": 20260203,
-            "start": 20260216,
-            "desc": "Stamp event to unlock the '猫の日2026' appeal sticker, and gain PC and BLC.",
-            "info": "Toggle this on to enable/disable this stamp event."
-        },
-        {
-            "id": "nblstampbonus10",
-            "type": "stamp",
-            "enabled": true,
-            "name": "∇ Weekly Stamp Bonus! #10",
-            "version": 20260203,
-            "start": 20260223,
-            "desc": "Stamp event to unlock the '梅花' appeal sticker, and gain PC and BLC.",
+            "name": "Shiranui Flare Stamp Event",
+            "version": 20260421,
+            "start": 20260423,
+            "desc": "Stamp sheet to unlock Shiranui Flare items, including appeal cards and appeal board stickers, etc. Earn stamp per each play of Shiranui Flare songs.",
             "info": "Toggle this on to enable/disable this stamp event."
         },
         {
@@ -1179,12 +1147,34 @@
         {
             "id": "valentines2026",
             "type": "gift_ap",
-            "enabled": false,
+            "enabled": true,
             "name": "Valentines 2026 Appeal Card",
             "version": 20260203,
-            "start": 20260214,
+            "start": 20260212,
             "desc": "Login to SDVX to get this appeal card.",
             "info": "Toggle this option to enable/disable this gift."
+        },
+        {
+            "id": "bpls5tripletribe3",
+            "type": "cross_online",
+            "enabled": true,
+            "name": "BEMANI PRO LEAGUE -SEASON 5- Triple Tribe Append",
+            "version": [
+                20260324,
+                20260324,
+                20260324
+            ],
+            "start": [
+                20260326,
+                20260326,
+                20260326
+            ],
+            "desc": "Crossover event between SOUND VOLTEX, DanceDanceRevolution, and beatmania IIDX where you would earn TTP points which can be used to unlock songs through the participating games.<br>However, since it's difficult to replicate such crossover event in Asphyxia, you can just toggle the corresponding SOUND VOLTEX songs' option to automatically unlock them on your next login.",
+            "info": [
+                "Song 1: '[mid:2378]'",
+                "Song 2: '[mid:2380]'",
+                "Song 3: '[mid:2382]'"
+            ]
         }
     ],
     "flags": [

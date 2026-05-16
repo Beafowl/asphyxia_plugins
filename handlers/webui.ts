@@ -1,8 +1,9 @@
 import { Profile } from '../models/profile'
+import { Param } from '../models/param'
 import { MusicRecord } from '../models/music_record'
 import { ValgeneTicket } from '../models/valgene_ticket'
 import { Skill } from '../models/skill'
-import { getVersion, IDToCode, GetCounter, computeForce, loadMusicDb, isCustomMid } from '../utils'
+import { getVersion, IDToCode, GetCounter } from '../utils'
 import { Mix } from '../models/mix'
 import { Rival } from '../models/rival'
 import { Item } from '../models/item'
@@ -12,6 +13,52 @@ import { PREGENE7, COURSES7 } from '../data/nbl'
 import { textureslist } from '../data/webui'
 import * as fs from 'fs'
 import { PNG } from '../webui/asset/js/pngjs/png.js'
+
+import { COURSES2 } from '../data/ii'
+import { PREGENE, COURSES6, MUSIC_OVERRIDE6 } from '../data/exg'
+import { PREGENE7, COURSES7, MUSIC_OVERRIDE7 } from '../data/nbl'
+import { textureslist } from '../data/webui'
+import * as fs from 'fs'
+import { PNG } from '../webui/asset/js/pngjs/png.js'
+import { DB_VER } from './migrate'
+import { getDateCodeInit } from '../utils'
+
+const translate_table = {
+      '龕': '€',
+      '釁': '🍄',
+      '驩': 'Ø',
+      '曦': 'à',
+      '齷': 'é',
+      '骭': 'ü',
+      '齶': '♡',
+      '彜': 'ū',
+      '罇': 'ê',
+      '雋': 'Ǜ',
+      '鬻': '♃',
+      '鬥': 'Ã',
+      '鬆': 'Ý',
+      '曩': 'è',
+      '驫': 'ā',
+      '齲': '♥',
+      '騫': 'á',
+      '趁': 'Ǣ',
+      '鬮': '¡',
+      '盥': '⚙︎',
+      '隍': '︎Ü',
+      '頽': 'ä',
+      '餮': 'Ƶ',
+      '黻': '*',
+      '蔕': 'ũ',
+      '闃': 'Ā',
+      '饌': '²',
+      '煢': 'ø',
+      '鑷': 'ゔ',
+      '墸': '͟͟͞ ',
+      '鹹': 'Ĥ',
+      '瀑': 'À',
+      '疉': 'Ö',
+      '鑒': '₩'
+}
 
 export const updateProfile = async (data: {
   refid: string;
@@ -23,10 +70,10 @@ export const updateProfile = async (data: {
   nemsys?: string;
   bgm?: string;
   subbg?: string;
-  stampA?: string;
-  stampB?: string;
-  stampC?: string;
-  stampD?: string;
+  stampLA?: string;
+  stampLB?: string;
+  stampLC?: string;
+  stampLD?: string;
   stampRA?: string;
   stampRB?: string;
   stampRC?: string;
@@ -40,6 +87,8 @@ export const updateProfile = async (data: {
   if (data.refid == null) return;
 
   const update: Update<Profile>['$set'] = {};
+  let custom = await DB.FindOne<Param>(data.refid, {collection: 'param', version: parseInt(data.version_select) ,type: 2, id: 2})
+  let customParam = (!custom) ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] : custom['param']
 
   if (data.name && data.name.length > 0) {
     const validName = data.name
@@ -59,74 +108,74 @@ export const updateProfile = async (data: {
     if (!_.isNaN(validAka)) update.akaname = validAka;
   }
 
-  if (data.nemsys && data.nemsys.length > 0) {
-    const validNemsys = parseInt(data.nemsys);
-    if (!_.isNaN(validNemsys)) update.nemsys = validNemsys;
-  }
-
   if (data.bplSupport && data.bplSupport.length > 0) {
     const validBplSupport = data.bplPro ? parseInt(data.bplSupport) + 10 : parseInt(data.bplSupport);
     if (!_.isNaN(validBplSupport)) update.bplSupport = validBplSupport;
   }
 
-  if (data.subbg && data.subbg.length > 0) {
-    const validSubbg = parseInt(data.subbg);
-    if (!_.isNaN(validSubbg)) update.subbg = validSubbg;
+  if (data.creatorItem && data.creatorItem.length > 0) {
+    const validCreatorItem = parseInt(data.creatorItem);
+    if (!_.isNaN(validCreatorItem)) update.creatorItem = validCreatorItem;
   }
 
   if (data.bgm && data.bgm.length > 0) {
     const validBGM = parseInt(data.bgm);
-    if (!_.isNaN(validBGM)) update.bgm = validBGM;
+    if (!_.isNaN(validBGM)) customParam[0] = validBGM;
   }
 
-  if (data.stampA && data.stampA.length > 0) {
-    const validStampA = parseInt(data.stampA);
-    if (!_.isNaN(validStampA)) update.stampA = validStampA;
+  if (data.subbg && data.subbg.length > 0) {
+    const validSubbg = parseInt(data.subbg);
+    if (!_.isNaN(validSubbg)) customParam[1] = validSubbg;
   }
 
-  if (data.stampB && data.stampB.length > 0) {
-    const validStampB = parseInt(data.stampB);
-    if (!_.isNaN(validStampB)) update.stampB = validStampB;
+  if (data.nemsys && data.nemsys.length > 0) {
+    const validNemsys = parseInt(data.nemsys);
+    if (!_.isNaN(validNemsys)) customParam[2] = validNemsys;
   }
 
-  if (data.stampC && data.stampC.length > 0) {
-    const validStampC = parseInt(data.stampC);
-    if (!_.isNaN(validStampC)) update.stampC = validStampC;
+  if (data.stampLA && data.stampLA.length > 0) {
+    const validStampLA = parseInt(data.stampLA);
+    if (!_.isNaN(validStampLA)) customParam[3] = validStampLA;
   }
 
-  if (data.stampD && data.stampD.length > 0) {
-    const validStampD = parseInt(data.stampD);
-    if (!_.isNaN(validStampD)) update.stampD = validStampD;
+  if (data.stampLB && data.stampLB.length > 0) {
+    const validStampLB = parseInt(data.stampLB);
+    if (!_.isNaN(validStampLB)) customParam[4] = validStampLB;
+  }
+
+  if (data.stampLC && data.stampLC.length > 0) {
+    const validStampLC = parseInt(data.stampLC);
+    if (!_.isNaN(validStampLC)) customParam[5] = validStampLC;
+  }
+
+  if (data.stampLD && data.stampLD.length > 0) {
+    const validStampLD = parseInt(data.stampLD);
+    if (!_.isNaN(validStampLD)) customParam[6] = validStampLD;
   }
 
   if (data.stampRA && data.stampRA.length > 0) {
     const validStampRA = parseInt(data.stampRA);
-    if (!_.isNaN(validStampRA)) update.stampRA = validStampRA;
+    if (!_.isNaN(validStampRA)) customParam[7] = validStampRA;
   }
 
   if (data.stampRB && data.stampRB.length > 0) {
     const validStampRB = parseInt(data.stampRB);
-    if (!_.isNaN(validStampRB)) update.stampRB = validStampRB;
+    if (!_.isNaN(validStampRB)) customParam[8] = validStampRB;
   }
 
   if (data.stampRC && data.stampRC.length > 0) {
     const validStampRC = parseInt(data.stampRC);
-    if (!_.isNaN(validStampRC)) update.stampRC = validStampRC;
+    if (!_.isNaN(validStampRC)) customParam[9] = validStampRC;
   }
 
   if (data.stampRD && data.stampRD.length > 0) {
     const validStampRD = parseInt(data.stampRD);
-    if (!_.isNaN(validStampRD)) update.stampRD = validStampRD;
+    if (!_.isNaN(validStampRD)) customParam[10] = validStampRD;
   }
 
   if (data.sysBG && data.sysBG.length > 0) {
     const validSysBG = parseInt(data.sysBG);
-    if (!_.isNaN(validSysBG)) update.sysBG = validSysBG;
-  }
-
-  if (data.creatorItem && data.creatorItem.length > 0) {
-    const validCreatorItem = parseInt(data.creatorItem);
-    if (!_.isNaN(validCreatorItem)) update.creatorItem = validCreatorItem;
+    if (!_.isNaN(validSysBG)) customParam[11] = validSysBG;
   }
 
   await DB.Update<Profile>(
@@ -135,32 +184,45 @@ export const updateProfile = async (data: {
     { $set: update }
   );
 
-  if (parseInt(data.skilltitle) >= 0) {
-    await DB.Update<Skill>(
+  if(parseInt(data.version_select) >= 6) {
+    if (parseInt(data.skilltitle) >= 0) {
+      await DB.Update<Skill>(
+        data.refid,
+        { collection: 'skill', version: parseInt(data.version_select) },
+        { $set: {
+            name: parseInt(data.skilltitle)
+          } 
+        }
+      );
+    }
+    
+    if (parseInt(data.valgeneTicket) >= 0) {
+      await DB.Upsert<ValgeneTicket>(
+        data.refid,
+        { collection: 'valgene_ticket' },
+        { $set: {
+            ticketNum: parseInt(data.valgeneTicket),
+            limitDate: Date.parse('31 Dec 2099 23:59:59 GMT'),
+            version: parseInt(data.version_select)
+          } 
+        }
+      );
+    }
+
+    await DB.Upsert<Param>(
       data.refid,
-      { collection: 'skill', version: parseInt(data.version_select) },
+      { collection: 'param', type: 2, id: 2, version: parseInt(data.version_select) },
       { $set: {
-          name: parseInt(data.skilltitle)
-        } 
+          param: customParam
+        }
       }
-    );
-  }
-  
-  if (parseInt(data.valgeneTicket) >= 0) {
-    await DB.Upsert<ValgeneTicket>(
-      data.refid,
-      { collection: 'valgene_ticket' },
-      { $set: {
-          ticketNum: parseInt(data.valgeneTicket),
-          limitDate: Date.parse('31 Dec 2099 23:59:59 GMT')
-        } 
-      }
-    );
+    )
   }
 };
 
 export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
   let mdbJsonFix = [];
+  let mdbJsonOmniFix = [];
   let mdbJsonFixFinal;
   let newJsonSongs = [];
   let newINFSongs = [];
@@ -173,89 +235,190 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
   let newValgeneItemFiles = []
   let newAkanames = []
   let runErrors = []
+  let runLogs = []
   let resourceJsonData = JSON.parse(U.DecodeString(await IO.ReadFile('webui/asset/json/data.json'), 'utf8'))
   let apCardJsonData = JSON.parse(U.DecodeString(await IO.ReadFile('webui/asset/json/appeal.json'), 'utf8'))
-
+  let courseDataUpdateSuccess = false
+  let ifsSuccess = []
+  const logLine = (message: string) => {
+    console.log(message)
+    runLogs.push(message)
+  }
+  const logError = (message: string) => {
+    console.log(message)
+    runLogs.push('[ERROR] ' + message)
+    runErrors.push(message)
+  }
+  
   try {
     // Get new music data from music_db.xml
-    console.log('Getting new music_db info')
-    if(IO.Exists(U.GetConfig('sdvx_eg_root_dir') + "/data/others/music_db.xml")) {
-      let mdb = U.parseXML(U.DecodeString(await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/others/music_db.xml"), "shift_jis"), false)
-      let prevAssetMdb = []
-      if(IO.Exists('webui/asset/json/music_db.json')) {
-        prevAssetMdb = JSON.parse(U.DecodeString(await IO.ReadFile('webui/asset/json/music_db.json'), 'utf8'))
-      }
-
-      let levelDiv = (mdb.mdb.music[0].difficulty.exhaust.difnum['@content'][0].toString().length === 3) ? 10 : 1
-      
-      mdb.mdb.music.forEach(musicValue => {
-        if(Object.keys(prevAssetMdb).length > 0) {
-          if(prevAssetMdb['mdb']['music'].find(item => parseInt(item['id']) == parseInt(musicValue['@attr'].id)) == undefined) {
-            console.log("New song added to json: " + musicValue.info.title_name['@content'] + " (" + musicValue.info.distribution_date['@content'] + ")") 
-            newJsonSongs.push([ musicValue['@attr'].id, '[' + musicValue.info.distribution_date['@content'] + ' | ' + musicValue['@attr'].id + '] ' + musicValue.info.title_name['@content']])
-          }
-
-          if(prevAssetMdb['mdb']['music'].find(item => (parseInt(item['id']) == parseInt(musicValue['@attr'].id) && parseInt(item['info']['inf_ver']) === 0)) != undefined) {
-            let infVer = musicValue.info.inf_ver['@content']
-            if(['6', '7'].includes(infVer)) {
-              console.log("New chart: [" + (infVer === '6') ? "XCD" : "NBL" + "] " + musicValue.info.title_name['@content'] + " (" + musicValue.info.distribution_date['@content'] + ")") 
-              newINFSongs.push([ musicValue['@attr'].id, '[' + musicValue.info.distribution_date['@content'] + ' | ' + musicValue['@attr'].id + '] ' + musicValue.info.title_name['@content']])
-            }
-          } 
-
-          if(prevAssetMdb['mdb']['music'].find(item => (parseInt(item['id']) == parseInt(musicValue['@attr'].id) && 'ultimate' in item['difficulty'] )) == undefined && 'ultimate' in musicValue.difficulty) {
-            console.log("New chart: [ULT] " + musicValue.info.title_name['@content'] + " (" + musicValue.info.distribution_date['@content'] + ")") 
-            newULTSongs.push([ musicValue['@attr'].id, '[' + musicValue.info.distribution_date['@content'] + ' | ' + musicValue['@attr'].id + '] ' + musicValue.info.title_name['@content']])
-          }
-        } else {
-          console.log("New song added to json: " + musicValue.info.title_name['@content'] + " (" + musicValue.info.distribution_date['@content'] + ")") 
-          newJsonSongs.push([ musicValue['@attr'].id, '[' + musicValue.info.distribution_date['@content'] + ' | ' + musicValue['@attr'].id + '] ' + musicValue.info.title_name['@content']])
-          
-          let infVer = musicValue.info.inf_ver['@content']
-          if(['6', '7'].includes(infVer)) {
-            console.log("New chart: [" + (infVer === '6') ? "XCD" : "NBL" + "] " + musicValue.info.title_name['@content'] + " (" + musicValue.info.distribution_date['@content'] + ")") 
-            newINFSongs.push([ musicValue['@attr'].id, '[' + musicValue.info.distribution_date['@content'] + ' | ' + musicValue['@attr'].id + '] ' + musicValue.info.title_name['@content']])
-          }
-        }
-
-        mdbJsonFix.push({
-          'id': musicValue['@attr'].id,
-          'info': {
-            'title_name': musicValue.info.title_name['@content'],
-            'version': musicValue.info.version['@content'][0].toString(),
-            'inf_ver': musicValue.info.inf_ver['@content'][0].toString(),
-            'distribution_date': musicValue.info.distribution_date['@content'][0]
-          },
-          'difficulty': {
-            'novice': (musicValue.difficulty.novice.difnum['@content'][0] / levelDiv).toString(),
-            'advanced': (musicValue.difficulty.advanced.difnum['@content'][0] / levelDiv).toString(),
-            'exhaust': (musicValue.difficulty.exhaust.difnum['@content'][0] / levelDiv).toString(),
-            'maximum': 'maximum' in musicValue.difficulty ? (musicValue.difficulty.maximum.difnum['@content'][0] / levelDiv).toString() : '0',
-            'infinite': 'infinite' in musicValue.difficulty ? (musicValue.difficulty.infinite.difnum['@content'][0] / levelDiv).toString() : '0',
-            'ultimate': 'ultimate' in musicValue.difficulty ? (musicValue.difficulty.ultimate.difnum['@content'][0] / levelDiv).toString() : '0'
-          }
-        });
-      })
-
-      mdbJsonFixFinal = {
-        'mdb': {
-          'music': mdbJsonFix
-        }
-      };
-      IO.WriteFile('webui/asset/json/music_db.json', JSON.stringify(mdbJsonFixFinal, null, 4));
-    } else {
-      console.log('Error reading music_db.xml.')
-      runErrors.push('Error reading music_db.xml.')
+    logLine('Getting new music_db info')
+    let prevAssetMdb = {}
+    let difLbl = ['', '', 'INF', 'GRV', 'HVN', 'VVD', 'XCD', 'NBL']
+    if(IO.Exists('webui/asset/json/music_db.json')) {
+      prevAssetMdb = JSON.parse(U.DecodeString(await IO.ReadFile('webui/asset/json/music_db.json'), 'utf8'))
     }
 
+    if (_.isEmpty(prevAssetMdb)) {
+      prevAssetMdb = {
+        'mdb': {
+          'music': []
+        }
+      }
+    }
+    for (let ver = 0; ver <= 7; ver++) {
+      if(!IO.Exists('./webui/asset/uploads/' + ver + '_mdb.xml')) continue
+      let musicOverride = ver === 7 ? MUSIC_OVERRIDE7 : MUSIC_OVERRIDE6
+      logLine('Importing ' + ((ver === 0) ? 'omnimix' : 'SDVX' + ver) + ' mdb')
+      let mdb = U.parseXML(U.DecodeString(await IO.ReadFile('./webui/asset/uploads/' + ver + '_mdb.xml'), "shift_jis"), false)
+      mdb.mdb.music.forEach(musicValue => {
+        let distributionDate = (ver > 1) ? musicValue.info.distribution_date['@content'][0].toString() : ''
+        let songTitleClean = (ver < 2) ? '' : musicValue.info.title_name['@content'].replace(/[龕釁驩曦齷骭齶彜罇雋鬻鬥鬆曩驫齲騫趁鬮盥隍頽餮黻蔕闃饌煢鑷墸鹹瀑疉鑒]/g, m => translate_table[m])
+        let levelDiv = (ver > 0 && ver < 6) ? 1 : (musicValue.difficulty.exhaust.difnum['@content'][0].toString().length === 3) ? 10 : 1
+        if(ver === 7) levelDiv = 10
+        let ind = prevAssetMdb['mdb']['music'].findIndex(item => parseInt(item['id']) == parseInt(musicValue['@attr'].id))
+        let dif = [{}, {}, {}, {}, {}, {}, {}, {}]
+        if (ind < 0) {
+          switch (ver) {
+            case 1:
+              dif[ver] = {
+                'novice': $(musicValue).number('difficulty.0.difnum').toString(),
+                'advanced': $(musicValue).number('difficulty.1.difnum').toString(),
+                'exhaust': $(musicValue).number('difficulty.2.difnum').toString(),
+              }
+              break
+            case 2:
+            case 3:
+              dif[ver] = {
+                'novice': (musicValue.difficulty.novice.difnum['@content'][0] / levelDiv).toString(),
+                'advanced': (musicValue.difficulty.advanced.difnum['@content'][0] / levelDiv).toString(),
+                'exhaust': (musicValue.difficulty.exhaust.difnum['@content'][0] / levelDiv).toString(),
+                'infinite': (musicValue.difficulty.infinite.difnum['@content'][0] / levelDiv).toString(),
+              } 
+              break
+            case 0:
+            case 6:
+            case 7:
+              dif[ver] = {
+                'novice': (musicValue.difficulty.novice.difnum['@content'][0] / levelDiv).toString(),
+                'advanced': (musicValue.difficulty.advanced.difnum['@content'][0] / levelDiv).toString(),
+                'exhaust': (musicValue.difficulty.exhaust.difnum['@content'][0] / levelDiv).toString(),
+                'maximum': 'maximum' in musicValue.difficulty ? (musicValue.difficulty.maximum.difnum['@content'][0] / levelDiv).toString() : '0',
+                'infinite': 'infinite' in musicValue.difficulty ? (musicValue.difficulty.infinite.difnum['@content'][0] / levelDiv).toString() : '0',
+                'ultimate': 'ultimate' in musicValue.difficulty ? (musicValue.difficulty.ultimate.difnum['@content'][0] / levelDiv).toString() : '0'
+              }
+          }
+
+          logLine("New song added to json: " + songTitleClean + " (" + musicValue.info.distribution_date['@content'] + ")")
+          newJsonSongs.push([ musicValue['@attr'].id, '[' + musicValue.info.distribution_date['@content'] + ' | ' + musicValue['@attr'].id + '] ' + musicValue.info.title_name['@content']])
+          let ovInd = musicOverride.findIndex(o => o.music_id === parseInt(musicValue['@attr'].id))
+          if(ovInd > 0 && 'date' in musicOverride[ovInd]) {
+            distributionDate = String(musicOverride[ovInd].date)
+          }
+          prevAssetMdb['mdb']['music'].push({
+            'id': musicValue['@attr'].id,
+            'info': {
+              'title_name': songTitleClean,
+              'version': musicValue.info.version['@content'][0].toString(),
+              ...ver === 0 && {'omnimix': ver === 0},
+              'inf_ver': musicValue.info.inf_ver['@content'][0].toString(),
+              'distribution_date': distributionDate
+            },
+            'difficulty': dif
+          })
+        } else {
+          dif = prevAssetMdb['mdb']['music'][ind]['difficulty']
+          let newInfVer = ver > 1 && (parseInt(prevAssetMdb['mdb']['music'][ind]['info']['inf_ver']) === 0 && parseInt(prevAssetMdb['mdb']['music'][ind]['info']['inf_ver']) < (ver === 2 ? (parseInt(musicValue.difficulty.infinite.difnum['@content'][0]) !== 0 ? 2 : 0) : parseInt(musicValue.info.inf_ver['@content'][0])))
+          let newUlt = ver >= 6 && !('ult' in prevAssetMdb['mdb']['music'][ind]['info']) && 'ultimate' in musicValue.difficulty
+          switch (ver) {
+            case 0:
+              dif[ver] = {
+                'novice': (musicValue.difficulty.novice.difnum['@content'][0] / levelDiv).toString(),
+                'advanced': (musicValue.difficulty.advanced.difnum['@content'][0] / levelDiv).toString(),
+                'exhaust': (musicValue.difficulty.exhaust.difnum['@content'][0] / levelDiv).toString(),
+                'maximum': 'maximum' in musicValue.difficulty ? (musicValue.difficulty.maximum.difnum['@content'][0] / levelDiv).toString() : '0',
+                'infinite': 'infinite' in musicValue.difficulty ? (musicValue.difficulty.infinite.difnum['@content'][0] / levelDiv).toString() : '0',
+                'ultimate': 'ultimate' in musicValue.difficulty ? (musicValue.difficulty.ultimate.difnum['@content'][0] / levelDiv).toString() : '0'
+              }
+              prevAssetMdb['mdb']['music'][ind]['info']['distribution_date'] = musicValue.info.distribution_date['@content'][0].toString()
+              prevAssetMdb['mdb']['music'][ind]['info']['omnimix'] = true
+              if(newInfVer) prevAssetMdb['mdb']['music'][ind]['info']['inf_ver'] = musicValue.info.inf_ver['@content'][0].toString()
+              break
+            case 1:
+              dif[ver] = {
+                'novice': $(musicValue).number('difficulty.0.difnum').toString(),
+                'advanced': $(musicValue).number('difficulty.1.difnum').toString(),
+                'exhaust': $(musicValue).number('difficulty.2.difnum').toString(),
+              }
+              break
+            case 2:
+            case 3:
+              dif[ver] = {
+                'novice': (musicValue.difficulty.novice.difnum['@content'][0] / levelDiv).toString(),
+                'advanced': (musicValue.difficulty.advanced.difnum['@content'][0] / levelDiv).toString(),
+                'exhaust': (musicValue.difficulty.exhaust.difnum['@content'][0] / levelDiv).toString(),
+                'infinite': (musicValue.difficulty.infinite.difnum['@content'][0] / levelDiv).toString(),
+              } 
+              if(ver === 3) {
+                prevAssetMdb['mdb']['music'][ind]['info']['distribution_date'] = musicValue.info.distribution_date['@content'][0].toString()
+                if(newInfVer) prevAssetMdb['mdb']['music'][ind]['info']['inf_ver'] = musicValue.info.inf_ver['@content'][0].toString()
+              }
+              break
+            // case 4:
+            // case 5:
+            //   dif[ver] = {
+            //     'novice': (musicValue.difficulty.novice.difnum['@content'][0] / levelDiv).toString(),
+            //     'advanced': (musicValue.difficulty.advanced.difnum['@content'][0] / levelDiv).toString(),
+            //     'exhaust': (musicValue.difficulty.exhaust.difnum['@content'][0] / levelDiv).toString(),
+            //     'maximum': (musicValue.difficulty.maximum.difnum['@content'][0] / levelDiv).toString(),
+            //     'infinite': (musicValue.difficulty.infinite.difnum['@content'][0] / levelDiv).toString(),
+            //   }
+            //   prevAssetMdb['mdb']['music'][ind]['info']['distribution_date'] = musicValue.info.distribution_date['@content'][0].toString()
+            //   prevAssetMdb['mdb']['music'][ind]['info']['inf_ver'] = musicValue.info.inf_ver['@content'][0].toString()
+            //   break
+            case 6:
+            case 7:
+              let distributionDate = musicValue.info.distribution_date['@content'][0].toString()
+              let ovInd = musicOverride.findIndex(o => o.music_id === parseInt(musicValue['@attr'].id))
+              if(ovInd > 0 && 'date' in musicOverride[ovInd]) {
+                distributionDate = String(musicOverride[ovInd].date)
+              }
+              dif[ver] = {
+                'novice': (musicValue.difficulty.novice.difnum['@content'][0] / levelDiv).toString(),
+                'advanced': (musicValue.difficulty.advanced.difnum['@content'][0] / levelDiv).toString(),
+                'exhaust': (musicValue.difficulty.exhaust.difnum['@content'][0] / levelDiv).toString(),
+                'maximum': 'maximum' in musicValue.difficulty ? (musicValue.difficulty.maximum.difnum['@content'][0] / levelDiv).toString() : '0',
+                'infinite': 'infinite' in musicValue.difficulty ? (musicValue.difficulty.infinite.difnum['@content'][0] / levelDiv).toString() : '0',
+                'ultimate': 'ultimate' in musicValue.difficulty ? (musicValue.difficulty.ultimate.difnum['@content'][0] / levelDiv).toString() : '0'
+              }
+              prevAssetMdb['mdb']['music'][ind]['info']['title_name'] = songTitleClean
+              prevAssetMdb['mdb']['music'][ind]['info']['distribution_date'] = distributionDate
+              if(newInfVer) prevAssetMdb['mdb']['music'][ind]['info']['inf_ver'] = musicValue.info.inf_ver['@content'][0].toString()
+              break
+          }
+          if(newInfVer) {
+            logLine("New chart: [" + difLbl[prevAssetMdb['mdb']['music'][ind]['info']['inf_ver']] + "] " + prevAssetMdb['mdb']['music'][ind]['info'].title_name + " (" + musicValue.info.distribution_date['@content'] + ")") 
+            newINFSongs.push([ musicValue['@attr'].id, '[' + musicValue.info.distribution_date['@content'] + ' | ' + musicValue['@attr'].id + '] ' + musicValue.info.title_name['@content']  + ' (' + difLbl[prevAssetMdb['mdb']['music'][ind]['info']['inf_ver']] + ')'])
+          }
+          if(newUlt) {
+            logLine("New chart: [ULT] " + musicValue.info.title_name['@content'] + " (" + musicValue.info.distribution_date['@content'] + ")") 
+            newULTSongs.push([ musicValue['@attr'].id, '[' + musicValue.info.distribution_date['@content'] + ' | ' + musicValue['@attr'].id + '] ' + musicValue.info.title_name['@content']])
+            prevAssetMdb['mdb']['music'][ind]['info']['ult'] = true
+          }
+          prevAssetMdb['mdb']['music'][ind]['difficulty'] = dif
+        }
+      })
+    }
+    IO.WriteFile('webui/asset/json/music_db.json', JSON.stringify(prevAssetMdb, null, 4));
+
     // Copying new nemsys files from gamedata
-    console.log("Copying new nemsys files from gamedata")
+    logLine("Copying new nemsys files from gamedata")
     if(IO.Exists(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/game_nemsys")) {
       let nemsysFiles = await IO.ReadDir(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/game_nemsys")
       for await (const nemsys of nemsysFiles) {
         let fileToWrite = await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/game_nemsys/" + nemsys.name)
         if(!IO.Exists('webui/asset/nemsys/' + nemsys.name.substring(0, (nemsys.name.length - 4)) + ".png") && !IO.Exists('webui/asset/nemsys/' + nemsys.name.substring(0, (nemsys.name.length - 4)) + ".jpg")) {
-          console.log("[nemsys] copying " + nemsys.name)
+          logLine("[nemsys] copying " + nemsys.name)
           IO.WriteFile('webui/asset/nemsys/' + nemsys.name, fileToWrite)
           newNemsysData.push(nemsys.name)
         }
@@ -263,25 +426,24 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
         if(nemsys.name.match(/([0-9]+)/g) != undefined) {
           let nemsysId = parseInt(nemsys.name.match(/([0-9]+)/g)[0])
           if(nemsysId && ![8, 9, 10, 11, 47].includes(nemsysId) && resourceJsonData.nemsys.find(nem => nem.value == nemsysId) == undefined) {
-            console.log("[nemsys] adding to json: " + nemsys.name)
+            logLine("[nemsys] adding to json: " + nemsys.name)
             resourceJsonData.nemsys.push({"value": nemsysId, "name": nemsys.name})
           }
         }
       }
     } else {
-      console.log('Error reading nemsys directory.')
-      runErrors.push('Error reading nemsys directory.')
+      logError('Error reading nemsys directory.')
     }
 
     // Copying new subbg files from gamedata
-    console.log("Copying new subbg files from gamedata")
+    logLine("Copying new subbg files from gamedata")
     if(IO.Exists(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/submonitor_bg")) {
       let subBGFiles = await IO.ReadDir(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/submonitor_bg")
       for await (const subbg of subBGFiles) {
         if (subbg.name.match(/^(subbg[_0-9]*)(\.png|\.jpg|\.mp4)/g)) {
           let fileToWrite = await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/submonitor_bg/" + subbg.name)
           if(!IO.Exists('webui/asset/submonitor_bg/' + subbg.name.substring(0, (subbg.name.length - 4)) + ".png") && !IO.Exists('webui/asset/submonitor_bg/' + subbg.name.substring(0, (subbg.name.length - 4))  + ".jpg") && !IO.Exists('webui/asset/submonitor_bg/' + subbg.name.substring(0, (subbg.name.length - 4))  + ".mp4")) {
-            console.log("[subbg] copying " + subbg.name)
+            logLine("[subbg] copying " + subbg.name)
             IO.WriteFile('webui/asset/submonitor_bg/' + subbg.name, fileToWrite)
             newSubBGData.push(subbg.name)
           } 
@@ -298,19 +460,18 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
             } else if(subbg.name.includes('.mp4')) subbgType = 'video'
             
             if(foundSubbg == -1) {
-              console.log("[subbg] adding " + subbgId + " - " + subbgName + " (" + subbgType + ")")
+              logLine("[subbg] adding " + subbgId + " - " + subbgName + " (" + subbgType + ")")
               resourceJsonData.subbg.push({"value": subbgId, "type": subbgType, "name": subbgName})
             }
           }
         }
       }
     } else {
-      console.log('Error reading submonitor_bg directory.')
-      runErrors.push('Error reading submonitor_bg directory.')
+      logError('Error reading submonitor_bg directory.')
     }
 
     // Copying new bgm files from gamedata
-    console.log("Copying new bgm files from gamedata")
+    logLine("Copying new bgm files from gamedata")
     if(IO.Exists(U.GetConfig('sdvx_eg_root_dir') + "/data/sound/custom")) {
       let bgmFiles = await IO.ReadDir(U.GetConfig('sdvx_eg_root_dir') + "/data/sound/custom")
       for await (const bgm of bgmFiles) {
@@ -318,7 +479,7 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
           let folderName = bgm.name.match(/(custom|special)_([0-9]*)/g)[0]
           if(folderName != '') {
             if(!IO.Exists('webui/asset/audio/' + folderName)) {
-              console.log("[bgm] extracting audio files from " + bgm.name + ".")
+              logLine("[bgm] extracting audio files from " + bgm.name + ".")
 
               // Thanks to mon/s3p_extract on GitHub.
               let bufOffset = 4
@@ -349,7 +510,7 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
 
             let bgmId = parseInt(bgm.name.match(/(?<=(custom|special)_)([0-9]*)/g)[0])
             if(bgmId && resourceJsonData.bgm.find(bgm => bgm.value == bgmId) == undefined) {
-              console.log("[bgm] adding to json: " + bgmId + " - " + bgm.name)
+              logLine("[bgm] adding to json: " + bgmId + " - " + bgm.name)
               newBGMData.push(bgm.name)
               resourceJsonData.bgm.push({"value": bgmId, "name": bgm.name})
             }
@@ -357,43 +518,41 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
         }
       }
     } else {
-      console.log('Error reading BGM directory.')
-      runErrors.push('Error reading BGM directory.')
+      logError('Error reading BGM directory.')
     }
 
     // Copying new chat stamps from gamedata
-    console.log("Copying new chat stamps from gamedata")
-    if(IO.Exists(U.GetConfig('sdvx_eg_root_dir') + "/data/others/chat_stamp.xml")) {
+    logLine("Copying new chat stamps from gamedata")
+    if (IO.Exists(U.GetConfig('sdvx_eg_root_dir') + "/data/others/chat_stamp.xml")) {
       let chatStampData = U.parseXML(U.DecodeString(await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/others/chat_stamp.xml"), "shift_jis"), false)
       // console.log(JSON.stringify(chatStampData.chat_stamp_data))
-      for(const chatStamp of chatStampData.chat_stamp_data.info) {
-        if(resourceJsonData.stamp.find(stamp => stamp['value'] === chatStamp.id['@content'][0]) == undefined) {
+      for (const chatStamp of chatStampData.chat_stamp_data.info) {
+        if (resourceJsonData.stamp.find(stamp => stamp['value'] === chatStamp.id['@content'][0]) == undefined) {
           let stampTitle = chatStamp.title['@content'] + " " + (parseInt(chatStamp.id['@content'][0]) % 4 !== 0 ? parseInt(chatStamp.id['@content'][0]) % 4 : 4)
-          console.log("[chat_stamp] " + chatStamp.id['@content'][0] + " - " + stampTitle)
-          resourceJsonData.stamp.push({"value": chatStamp.id['@content'][0], "name": stampTitle})
+          logLine("[chat_stamp] " + chatStamp.id['@content'][0] + " - " + stampTitle)
+          resourceJsonData.stamp.push({ "value": chatStamp.id['@content'][0], "name": stampTitle })
           newChatStampData.push(chatStamp.id['@content'][0] + ": " + chatStamp.filename['@content'])
-        } 
-        if(!IO.Exists('webui/asset/chat_stamp/' + chatStamp.filename['@content'] + '.png') && !IO.Exists('webui/asset/chat_stamp/' + chatStamp.filename['@content'] + '.png')) {
-          console.log("[chat_stamp] copying " + chatStamp.filename['@content'] + '.png')
+        }
+        if (!IO.Exists('webui/asset/chat_stamp/' + chatStamp.filename['@content'] + '.png') && !IO.Exists('webui/asset/chat_stamp/' + chatStamp.filename['@content'] + '.png')) {
+          logLine("[chat_stamp] copying " + chatStamp.filename['@content'] + '.png')
           let fileToWrite = await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/chat_stamp/" + chatStamp.filename['@content'] + ".png")
           IO.WriteFile('webui/asset/chat_stamp/' + chatStamp.filename['@content'] + '.png', fileToWrite)
         }
       }
-      resourceJsonData.stamp.sort(function(a, b){return a.value - b.value})
+      resourceJsonData.stamp.sort(function (a, b) { return a.value - b.value })
     } else {
-      console.log('Error reading chat stamp xml file.')
-      runErrors.push('Error reading chat stamp xml file.')
+      logError('Error reading chat stamp xml file.')
     }
 
     // Copying new valgene_item files from gamedata
-    console.log("Copying new valgene_item files from gamedata")
+    logLine("Copying new valgene_item files from gamedata")
     if(IO.Exists(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/valgene_item")) {
       let valgeneItemFiles = await IO.ReadDir(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/valgene_item")
       for await (const valgeneItem of valgeneItemFiles) {
         if (valgeneItem.name.substring(valgeneItem.name.length-4, valgeneItem.name.length).match(/(\.png|\.jpg)/g)) {
           let fileToWrite = await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/valgene_item/" + valgeneItem.name)
           if(!IO.Exists('webui/asset/valgene_item/' + valgeneItem.name.substring(0, (valgeneItem.name.length - 4)) + ".png") && !IO.Exists('webui/asset/valgene_item/' + valgeneItem.name.substring(0, (valgeneItem.name.length - 4))  + ".jpg")) {
-            console.log("[valgene_item] copying " + valgeneItem.name)
+            logLine("[valgene_item] copying " + valgeneItem.name)
             IO.WriteFile('webui/asset/valgene_item/' + valgeneItem.name, fileToWrite)
             newValgeneItemFiles.push(valgeneItem.name)
           }
@@ -401,62 +560,58 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
         }
       }
     } else {
-      console.log('Error reading valgene_item directory.')
-      runErrors.push('Error reading valgene_item directory.')
+      logError('Error reading valgene_item directory.')
     }
 
     // Copying new akanames from gamedata
-    console.log("Copying new appeal titles from gamedata")
+    logLine("Copying new appeal titles from gamedata")
     // resourceJsonData.akaname = []
     if(IO.Exists(U.GetConfig('sdvx_eg_root_dir') + "/data/others/akaname_parts.xml")) {
       let akanameData = U.parseXML(U.DecodeString(await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/others/akaname_parts.xml"), "shift_jis"), false)
       for(const akaname of akanameData.akaname_parts.part) {
         if(resourceJsonData.akaname.find(aka => aka.value === akaname['@attr'].id) === undefined) {
           let akanameFmtd = ('@content' in akaname.word) ? akaname.word['@content'].replace(/(\[[A-z0-9:,\/\]]*)/g,'') : ''
-          console.log("[appeal title] adding " + akaname['@attr'].id + " - " + akanameFmtd)
+          logLine("[appeal title] adding " + akaname['@attr'].id + " - " + akanameFmtd)
           resourceJsonData.akaname.push({"value": akaname['@attr'].id, "name": akanameFmtd})
           newAkanames.push(akaname['@attr'].id + ": " + akanameFmtd )
         } 
       }
       resourceJsonData.akaname.sort(function(a, b){return parseInt(a.value) - parseInt(b.value)})
     } else {
-      console.log('Error reading akaname xml file.')
-      runErrors.push('Error reading akaname xml file.')
+      logError('Error reading akaname xml file.')
     }
 
     // Copying new appeal card data from gamedata
-    console.log("Copying new appeal card data from gamedata")
+    logLine("Copying new appeal card data from gamedata")
     if(IO.Exists(U.GetConfig('sdvx_eg_root_dir') + "/data/others/appeal_card.xml")) {
       let apCardData = U.parseXML(U.DecodeString(await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/others/appeal_card.xml"), "shift_jis"), false)
       for(const apCard of apCardData.appeal_card_data.card) {
         if(apCardJsonData.appeal_card_data.card.find(ap => ap['@id'] === apCard['@attr'].id) == undefined) {
-          console.log("[ap_card] adding to json: " + apCard['@attr'].id + " - " + apCard.info['title']['@content'])
+          logLine("[ap_card] adding to json: " + apCard['@attr'].id + " - " + apCard.info['title']['@content'])
           apCardJsonData.appeal_card_data.card.push({"@id": apCard['@attr'].id, "info": {"texture": apCard.info['texture']['@content'], "title": apCard.info['title']['@content']}})
           newAPCardData.push(apCard['@attr'].id + ": " + apCard.info['texture']['@content'] + "(" + apCard.info['title']['@content'] + ")")
         }
         if(!IO.Exists('webui/asset/ap_card/' + apCard.info['texture']['@content'] + '.png') && !IO.Exists('webui/asset/ap_card/' + apCard.info['texture']['@content'] + '.jpg')) {
-          console.log("[ap_card] copying " + apCard.info['texture']['@content'] + '.png')
+          logLine("[ap_card] copying " + apCard.info['texture']['@content'] + '.png')
           let fileToWrite = await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + "/data/graphics/ap_card/" + apCard.info['texture']['@content'] + ".png")
           IO.WriteFile('webui/asset/ap_card/' + apCard.info['texture']['@content'] + '.png', fileToWrite)
         }
       }
       apCardJsonData.appeal_card_data.card.sort(function(a, b){return parseInt(a['@id']) - parseInt(b['@id'])})
     } else {
-      console.log('Error reading appeal card xml file.')
-      runErrors.push('Error reading appeal card xml file.')
+      logError('Error reading appeal card xml file.')
     }
 
     await IO.WriteFile('webui/asset/json/data.json', JSON.stringify(resourceJsonData, null, 4))
     await IO.WriteFile('webui/asset/json/appeal.json', JSON.stringify(apCardJsonData, null, 4))
 
     // Extract textures from ifs files using pngjs. Massive thanks to https://github.com/mon/ifstools
-    console.log("Extracting textures from IFS files")
-    let ifsSuccess = []
+    logLine("Extracting textures from IFS files")
     for(let listIter = 0; listIter < textureslist.length; listIter++) {
       let manifestJson = {}
       let bufOffset = 0
       let magic = '6CAD8F89'
-      console.log(textureslist[listIter]['file'] + ":")
+      logLine(textureslist[listIter]['file'] + ":")
       if(IO.Exists(U.GetConfig('sdvx_eg_root_dir') + textureslist[listIter].file)) {
         let ifsBuffer = await IO.ReadFile(U.GetConfig('sdvx_eg_root_dir') + textureslist[listIter].file, {flag: 'r'})
         if(!fs.existsSync('plugins/sdvx@asphyxia/webui/asset/' + textureslist[listIter].asset_folder)) {
@@ -551,35 +706,34 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
                     pngf.data = Buffer.from(decompressed)
                     const outputStream = await fs.createWriteStream('plugins/sdvx@asphyxia/webui/asset/' + textureslist[listIter].asset_folder + '/' + tdFileName);
                     await pngf.pack().pipe(outputStream);
-                    console.log(' - ' + tdFileName + ' created successfully.');
+                    logLine(' - ' + tdFileName + ' created successfully.');
                     ifsSuccess.push(textureslist[listIter].file + ' - ' + tdFileName)
                   } else {
-                    console.log("Decompression mismatch for " + textureslist[listIter]['file'] + '/' + tdFileName)
-                    runErrors.push('decompression mismatch for ' + textureslist[listIter]['file'] + '/' + tdFileName)
+                    logError('decompression mismatch for ' + textureslist[listIter]['file'] + '/' + tdFileName)
                   }
                 }
               }
             }
           }
           if(!md5Matched) {
-            console.log('MD5 mismatch.')
-            runErrors.push('MD5 mismatch - ' + textureslist[listIter].file)
+            logError('MD5 mismatch - ' + textureslist[listIter].file)
           }
         } else {
-          console.log('IFS file unsupported/invalid.')
-          runErrors.push('IFS file "' + textureslist[listIter].file + '" unsupported/invalid.')
+          logError('IFS file "' + textureslist[listIter].file + '" unsupported/invalid.')
         }
       } else {
-        console.log('Error reading ' + textureslist[listIter].file + '.')
-        runErrors.push('Error reading ' + textureslist[listIter].file + '.')
+        logError('Error reading ' + textureslist[listIter].file + '.')
       }
     }
 
-    console.log("Updating course_data.json")
-    let courseDataUpdateSuccess = false
+    logLine("Updating course_data.json")
+
     let courseData = JSON.parse(U.DecodeString(await IO.ReadFile('webui/asset/json/course_data.json'), 'utf8'))
     for(let cIter = 0; cIter < courseData.courseData.length; cIter++) {
-      if(courseData.courseData[cIter].version === 6) {
+      if(courseData.courseData[cIter].version === 2) {
+        courseData.courseData[cIter].info = COURSES2
+        courseDataUpdateSuccess = true
+      } else if(courseData.courseData[cIter].version === 6) {
         courseData.courseData[cIter].info = COURSES6
         courseDataUpdateSuccess = true
       } else if(courseData.courseData[cIter].version === 7) {
@@ -587,14 +741,15 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
         courseDataUpdateSuccess = true
       }
     }
-    if(courseDataUpdateSuccess === false) runErrors.push('[course_data] Update unsuccessful.')
+    if(courseDataUpdateSuccess === false) logError('[course_data] Update unsuccessful.')
 
     await IO.WriteFile('webui/asset/json/course_data.json', JSON.stringify(courseData, null, 4))
     
-    console.log("Update complete!")
+    logLine("Update complete!")
     send.json(
       {
         status: 'ok',
+        logs: runLogs,
         course: courseDataUpdateSuccess,
         ifs: ifsSuccess,
         akaname: newAkanames,
@@ -611,10 +766,12 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
       }
     )
   } catch (error) {
-    runErrors.push(error.stack)
+    let stack = (error && error.stack) ? error.stack : String(error)
+    logError(stack)
     send.json(
       {
         status: 'error',
+        logs: runLogs,
         errors: runErrors
       }
     )
@@ -623,98 +780,37 @@ export const copyResourcesFromGame = async (data: {}, send: WebUISend) => {
 
 export const getRivalScores = async (data: { rivalId: string; refid: string; version: string; }, send: WebUISend) => {
   let ver = parseInt(data.version)
-  // The rival entry might be missing if the page state is stale (e.g. the
-  // user opened a second tab and removed the rival there). Guard the
-  // dereferences so we surface a clean error instead of throwing.
-  let rivalEntry = await DB.FindOne<Rival>(data.refid, {collection: 'rival', refid: data.rivalId, version: ver})
-  if (!rivalEntry) {
-    send.json({ error: 'That rival is no longer in your list. Refresh the page.' })
-    return
-  }
+  let rival = await DB.FindOne<Rival>(data.refid, {collection: 'rival', refid: data.rivalId, version: ver})
   send.json({
     rival: await DB.FindOne<Profile>(data.rivalId, {collection: 'profile', version: ver}),
     yourScores: await DB.Find<MusicRecord>(data.refid, { collection: 'music', version: ver }),
-    rivalScores: await DB.Find<MusicRecord>(rivalEntry.refid, { collection: 'music', version: ver })
+    rivalScores: await DB.Find<MusicRecord>(rival.refid, { collection: 'music', version: ver })
   })
 }
 
-// Toggles a rival entry: if the target isn't already a rival on this
-// version, it's added; otherwise it's removed. We key the existence check
-// AND the remove on (refid + version) only — the previous code also
-// filtered by name, which goes stale if the rival profile was renamed and
-// caused the remove to silently no-op while the toggle still flipped state
-// in the UI. Returns a structured response so the frontend can render
-// success vs. error vs. a clear "already in that state" message.
 export const addRival = async (data: { rivalId: string; refid: string; version: string }, send: WebUISend) => {
-  if (!data.rivalId || !data.refid || !data.version) {
-    send.json({ success: false, error: 'Missing rivalId, refid, or version.' })
-    return
-  }
   let ver = parseInt(data.version)
-  if (!Number.isFinite(ver)) {
-    send.json({ success: false, error: 'Invalid version.' })
-    return
-  }
-  if (data.rivalId === data.refid) {
-    send.json({ success: false, error: 'You cannot add yourself as a rival.' })
-    return
-  }
-
   let you = await DB.FindOne<Profile>(data.refid, {collection: 'profile', version: ver})
   let rival = await DB.FindOne<Profile>(data.rivalId, {collection: 'profile', version: ver})
-  if (!you) {
-    send.json({ success: false, error: `Your profile for version ${ver} could not be found.` })
-    return
-  }
 
-  // If the rival has no profile at this version we still allow the toggle
-  // to proceed — they may have a profile at another version, or this may
-  // be an orphan we want to clean up. We just don't have fresh metadata
-  // to stamp on the new doc.
-  let theyRivalYou = (await DB.Count<Rival>(data.rivalId, {collection: 'rival', refid: data.refid, version: ver})) > 0
-  let alreadyRival = (await DB.Count<Rival>(data.refid, {collection: 'rival', refid: data.rivalId, version: ver})) > 0
-
-  if (!alreadyRival) {
-    if (theyRivalYou) {
-      // Stamp mutuality on the OTHER side too so both rows agree.
-      DB.Upsert(data.rivalId, {collection: 'rival', refid: data.refid, version: ver}, {$set: {mutual: true, sdvxID: you.id, name: you.name}})
+  let checkMutual = (await DB.Count<Rival>(data.rivalId, {collection: 'rival', refid: data.refid, version: ver}) > 0)
+  if(await DB.Count<Rival>(data.refid, {collection: 'rival', refid: data.rivalId, version: ver}) === 0) {
+    if(checkMutual) {
+      DB.Upsert<Rival>(data.rivalId, {collection: "rival", sdvxID: you.id, refid: data.refid, name: you.name, version: ver}, {$set: {mutual: checkMutual, dbver: DB_VER}})
     }
-    let inserted = await DB.Insert(data.refid, {
-      collection: 'rival',
-      sdvxID: rival ? rival.id : 0,
-      refid: data.rivalId,
-      name: rival ? rival.name : '',
-      version: ver,
-      mutual: theyRivalYou,
-    })
-    if (!inserted) {
-      send.json({ success: false, error: 'Failed to add the rival entry to the database.' })
-      return
-    }
+    DB.Insert<Rival>(data.refid, {collection: "rival", sdvxID: rival.id, refid: data.rivalId, name: rival.name, version: ver, mutual: checkMutual, dbver: DB_VER})
     send.json({
-      success: true,
-      action: 'added',
-      msg: 'Rival added. They also need to add you for the rivalry to appear in-game.',
+      "msg": "Successfully added profile to rival. In order for your rivals to appear in-game, they need to add you as their rival as well."
     })
-    return
+  } else {
+    if(checkMutual) {
+      DB.Upsert<Rival>(data.rivalId, {collection: "rival", sdvxID: you.id, refid: data.refid, name: you.name, version: ver}, {$set: {"mutual": false, dbver: DB_VER}})
+    }
+    DB.Remove<Rival>(data.refid, {collection: "rival", sdvxID: rival.id, refid: data.rivalId, name: rival.name, version: ver, dbver: DB_VER})
+    send.json({
+      "msg": "Successfully removed rival."
+    })
   }
-
-  // Remove path. Match by refid + version only — the old `name` filter
-  // was the cause of "I clicked Remove but the rival is still there"
-  // bugs whenever the rival had been renamed since being added.
-  if (theyRivalYou) {
-    DB.Upsert(data.rivalId, {collection: 'rival', refid: data.refid, version: ver}, {$set: {mutual: false}})
-  }
-  let removed = await DB.Remove(data.refid, {collection: 'rival', refid: data.rivalId, version: ver})
-  if (!removed) {
-    send.json({ success: false, error: 'Could not remove the rival entry. It may already be gone — refresh the page.' })
-    return
-  }
-  send.json({
-    success: true,
-    action: 'removed',
-    msg: 'Rival removed.',
-  })
 }
 
 export const preGeneRoll = async (data: { set: number, refid: string, items: [] }, send: WebUISend) => {
@@ -1254,4 +1350,9 @@ function runIfsCommand(
       resolve({ exitCode: code ?? -1, stdout, stderr });
     });
   });
+
+export const getDateCode = async(data: {}, send: WebUISend) =>  {
+  send.json({
+    datecode: await getDateCodeInit()
+  })
 }

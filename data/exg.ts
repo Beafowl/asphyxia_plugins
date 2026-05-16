@@ -73,7 +73,11 @@ export const LICENSED_SONGS6 = [
   2194, 2195, 2196, 2197, 2210, 2211, 2212, 2213, 2214, 2215,
   2216, 2217, 2218, 2219, 2205, 2206, 2207, 2208, 2224, 2176,
   2182, 2241, 2244, 2243, 2242, 2240, 2245, 2220, 2221, 2287,
-  2288, 2289, 2290, 2291, 2192
+  2288, 2289, 2290, 2291, 2192, 2228, 2229, 2230, 1734,
+
+  // omnimix
+  664, 1330, 1350, 1351, 1352, 1353, 1354, 1356, 1357, 1358,
+  1355, 1359, 1446, 1447, 1448, 1449, 1453, 1454, 1455, 1456
 ]
 
 export const VALKYRIE_SONGS = [
@@ -1340,7 +1344,7 @@ export const ARENA_STATION_ITEMS = {
 export const VALGENE = {
   info: [
     {
-      valgene_name: "ヴァルキリージェネレーター　第１弾",
+      valgene_name: "ヴァルキリージェネレーター　第1弾",
       valgene_name_english: "Valkyrie Generator Vol. 1",
       valgene_id: 1,
       version: 20210426
@@ -6811,3 +6815,5 @@ export const EXTENDS6 = [
     ],
   }
 ]
+
+export const MUSIC_OVERRIDE6 = []
