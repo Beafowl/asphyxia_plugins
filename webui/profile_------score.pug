@@ -48,10 +48,13 @@ script(src="static/asset/js/score.js")
 script(src="static/asset/js/datatables.js")
 script.
   (function() {
-    // canEdit is set by the parent profile layout (isAdmin || isOwner)
-    if (typeof canEdit !== 'undefined' && canEdit) {
-      document.getElementById('clear-custom-card').style.display = '';
-    }
+    // canEdit is defined in block scripts (after this content), so defer
+    // the visibility check until all scripts on the page have run.
+    window.addEventListener('load', function() {
+      if (typeof canEdit !== 'undefined' && canEdit) {
+        document.getElementById('clear-custom-card').style.display = '';
+      }
+    });
     document.getElementById('clear-custom-scores-btn').addEventListener('click', function() {
       if (!confirm('Remove all custom chart scores for this profile? This cannot be undone.')) return;
       var btn = this;
