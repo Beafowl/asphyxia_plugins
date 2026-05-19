@@ -147,13 +147,22 @@ export async function getNauticaSlotsStatus(): Promise<NauticaSlotsStatus> {
   };
 }
 
+// IDs reserved during this server session but not yet written to the DB.
+// Prevents concurrent prepareForConversion calls from allocating the same
+// mid when they all query the DB before any of them has written their mid back.
+const _reservedMids = new Set<number>();
+
 export async function GetNextNauticaId(): Promise<number> {
   const start = getNauticaIdStart();
   const songs = await DB.Find<any>({ collection: 'nautica_song', mid: { $gte: start } });
   const usedIds = new Set((songs || []).map((s: any) => s.mid));
+  // Include in-memory reservations not yet persisted to the DB
+  for (const id of _reservedMids) usedIds.add(id);
 
   for (let id = start; id <= NAUTICA_ID_END; id++) {
     if (!usedIds.has(id)) {
+      // Reserve synchronously before any await so concurrent callers see it
+      _reservedMids.add(id);
       await DB.Upsert<Counter>(
         { collection: 'counter', key: 'nautica_music_id' },
         { $set: { value: id } }
