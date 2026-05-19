@@ -33,7 +33,46 @@ div
             th Clear Medal
         tbody
 
+if canEdit
+  .card(style="margin-top:1rem")
+    .card-content
+      p.has-text-weight-semibold.mb-2 Custom Chart Scores
+      p.mb-3 Remove all scores for custom (Nautica) charts from this profile. This cannot be undone.
+      button.button.is-danger.is-outlined#clear-custom-scores-btn
+        span.icon
+          i.mdi.mdi-delete
+        span Clear Custom Chart Scores
+
 div(hidden id='profile-pass') !{JSON.stringify(profile)}
 div(hidden id='score-pass') !{JSON.stringify(score)}
-script(src="static/asset/js/score.js") 
+script(src="static/asset/js/score.js")
 script(src="static/asset/js/datatables.js")
+if canEdit
+  script.
+    document.getElementById('clear-custom-scores-btn').addEventListener('click', function() {
+      if (!confirm('Remove all custom chart scores for this profile? This cannot be undone.')) return;
+      var btn = this;
+      btn.classList.add('is-loading');
+      btn.disabled = true;
+      fetch('/emit/sdvx@asphyxia/clearCustomChartScores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refid: refid }),
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+        if (data.success) {
+          alert('Removed scores for ' + data.songs + ' custom chart(s) (' + data.removed + ' entries).');
+          location.reload();
+        } else {
+          alert('Error: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(function(e) {
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+        alert('Request failed: ' + e);
+      });
+    });

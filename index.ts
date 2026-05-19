@@ -13,7 +13,8 @@ import {
   addWeekly,
   getWeekRankList,
   updateScore,
-  getDateCode
+  getDateCode,
+  clearCustomChartScores,
 } from './handlers/webui';
 import {
   load,
@@ -103,6 +104,7 @@ export function register() {
   R.WebUIEvent('addWeekly', addWeekly);
   R.WebUIEvent('getWeekRankList', getWeekRankList);
   R.WebUIEvent('getDateCode', getDateCode);
+  R.WebUIEvent('clearCustomChartScores', clearCustomChartScores);
   R.WebUIEvent('nauticaBrowse', nauticaBrowse);
   R.WebUIEvent('nauticaApprove', nauticaApprove);
   R.WebUIEvent('nauticaRemove', nauticaRemove);
