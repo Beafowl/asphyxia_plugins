@@ -33,22 +33,25 @@ div
             th Clear Medal
         tbody
 
-if canEdit
-  .card(style="margin-top:1rem")
-    .card-content
-      p.has-text-weight-semibold.mb-2 Custom Chart Scores
-      p.mb-3 Remove all scores for custom (Nautica) charts from this profile. This cannot be undone.
-      button.button.is-danger.is-outlined#clear-custom-scores-btn
-        span.icon
-          i.mdi.mdi-delete
-        span Clear Custom Chart Scores
+.card(style="margin-top:1rem;display:none" id="clear-custom-card")
+  .card-content
+    p.has-text-weight-semibold.mb-2 Custom Chart Scores
+    p.mb-3 Remove all scores for custom (Nautica) charts from this profile. This cannot be undone.
+    button.button.is-danger.is-outlined#clear-custom-scores-btn
+      span.icon
+        i.mdi.mdi-delete
+      span Clear Custom Chart Scores
 
 div(hidden id='profile-pass') !{JSON.stringify(profile)}
 div(hidden id='score-pass') !{JSON.stringify(score)}
 script(src="static/asset/js/score.js")
 script(src="static/asset/js/datatables.js")
-if canEdit
-  script.
+script.
+  (function() {
+    // canEdit is set by the parent profile layout (isAdmin || isOwner)
+    if (typeof canEdit !== 'undefined' && canEdit) {
+      document.getElementById('clear-custom-card').style.display = '';
+    }
     document.getElementById('clear-custom-scores-btn').addEventListener('click', function() {
       if (!confirm('Remove all custom chart scores for this profile? This cannot be undone.')) return;
       var btn = this;
@@ -76,3 +79,4 @@ if canEdit
         alert('Request failed: ' + e);
       });
     });
+  })();
